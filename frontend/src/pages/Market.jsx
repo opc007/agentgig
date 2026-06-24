@@ -5,12 +5,14 @@ import useStore from '../store/useStore'
 import AgentCharacter from '../components/AgentCharacter'
 import TaskCard from '../components/TaskCard'
 import ChatWindow from '../components/ChatWindow'
+import { useI18n } from '../i18n'
 
 export default function Market() {
   const { agents, pendingTasks, stats, fetchOnlineAgents, fetchPendingTasks, fetchStats, seedDemoData, createTask, user } = useStore()
   const [showChat, setShowChat] = useState(false)
   const [newTaskFlash, setNewTaskFlash] = useState(null)
   const navigate = useNavigate()
+  const { t } = useI18n()
 
   useEffect(() => {
     fetchOnlineAgents()
@@ -34,13 +36,13 @@ export default function Market() {
       setShowChat(false)
       navigate(`/tasks/${task.id}`)
     } catch (e) {
-      alert(e.response?.data?.detail || '发布失败，请先登录并确保余额充足')
+      alert(e.response?.data?.detail || t('market.publishFailed'))
     }
   }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Hero 区域 */}
+      {/* Hero */}
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
@@ -48,36 +50,36 @@ export default function Market() {
       >
         <h1 className="text-5xl font-bold mb-4">
           <span className="bg-gradient-to-r from-primary-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-            AI 智能体人才市场
+            {t('market.title')}
           </span>
         </h1>
         <p className="text-xl text-gray-500 mb-6">
-          让 AI 智能体互相服务，老板们轻松赚钱
+          {t('market.subtitle')}
         </p>
         <div className="flex justify-center space-x-4">
           {!user ? (
             <>
               <Link to="/register" className="btn-primary text-lg px-8 py-3">
-                立即入驻
+                {t('market.joinNow')}
               </Link>
               <button onClick={() => setShowChat(true)} className="btn-secondary text-lg px-8 py-3">
-                试试发包
+                {t('market.tryPost')}
               </button>
             </>
           ) : (
             <>
               <Link to="/create-task" className="btn-primary text-lg px-8 py-3">
-                发布任务
+                {t('market.publishTask')}
               </Link>
               <Link to="/dashboard" className="btn-secondary text-lg px-8 py-3">
-                我的工作台
+                {t('market.myDashboard')}
               </Link>
             </>
           )}
         </div>
       </motion.div>
 
-      {/* 平台统计 */}
+      {/* Stats */}
       {stats && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -86,10 +88,10 @@ export default function Market() {
           className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12"
         >
           {[
-            { label: '注册用户', value: stats.total_users, icon: '👤' },
-            { label: '在线智能体', value: stats.online_agents, icon: '🤖' },
-            { label: '任务总数', value: stats.total_tasks, icon: '📋' },
-            { label: '已完成', value: stats.completed_tasks, icon: '✅' },
+            { label: t('market.totalUsers'), value: stats.total_users, icon: '👤' },
+            { label: t('market.onlineAgents'), value: stats.online_agents, icon: '🤖' },
+            { label: t('market.totalTasks'), value: stats.total_tasks, icon: '📋' },
+            { label: t('market.completedTasks'), value: stats.completed_tasks, icon: '✅' },
           ].map((stat, i) => (
             <div key={i} className="card p-4 text-center">
               <span className="text-2xl">{stat.icon}</span>
@@ -100,7 +102,7 @@ export default function Market() {
         </motion.div>
       )}
 
-      {/* 初始化按钮（开发用） */}
+      {/* Init Demo Data */}
       {stats && stats.total_users === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -108,26 +110,26 @@ export default function Market() {
           className="text-center mb-8"
         >
           <button onClick={handleSeedData} className="btn-secondary">
-            初始化演示数据
+            {t('market.initDemoData')}
           </button>
-          <p className="text-sm text-gray-400 mt-2">点击创建演示用户、智能体和任务</p>
+          <p className="text-sm text-gray-400 mt-2">{t('market.initDemoHint')}</p>
         </motion.div>
       )}
 
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* 左侧：智能体等候区 */}
+        {/* Agent Waiting Area */}
         <div className="lg:col-span-1">
           <div className="card p-6">
             <h2 className="text-lg font-bold mb-4 flex items-center space-x-2">
               <span>🤖</span>
-              <span>智能体等候区</span>
-              <span className="text-sm font-normal text-gray-400">({agents.length} 位在线)</span>
+              <span>{t('market.agentWaitingArea')}</span>
+              <span className="text-sm font-normal text-gray-400">({agents.length} {t('market.onlineCount')})</span>
             </h2>
             <div className="grid grid-cols-3 gap-4">
               {agents.length === 0 ? (
                 <p className="col-span-3 text-center text-gray-400 py-8">
-                  暂无在线智能体<br />
-                  <span className="text-sm">点击上方"初始化演示数据"试试</span>
+                  {t('market.noOnlineAgents')}<br />
+                  <span className="text-sm">{t('market.tryInitHint')}</span>
                 </p>
               ) : (
                 agents.map(agent => (
@@ -143,17 +145,17 @@ export default function Market() {
           </div>
         </div>
 
-        {/* 中间：任务公告栏 */}
+        {/* Task Board */}
         <div className="lg:col-span-2">
           <div className="card p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold flex items-center space-x-2">
                 <span>📋</span>
-                <span>任务公告栏</span>
-                <span className="text-sm font-normal text-gray-400">({pendingTasks.length} 个待接单)</span>
+                <span>{t('market.taskBoard')}</span>
+                <span className="text-sm font-normal text-gray-400">({pendingTasks.length} {t('market.pendingCount')})</span>
               </h2>
               <Link to="/tasks" className="text-primary-600 hover:text-primary-700 text-sm">
-                查看全部
+                {t('common.viewAll')}
               </Link>
             </div>
 
@@ -165,7 +167,7 @@ export default function Market() {
                   exit={{ opacity: 0, scale: 0.8 }}
                   className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700"
                 >
-                  🎉 新任务发布！智能体们开始抢接了...
+                  {t('market.newTaskFlash')}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -173,8 +175,8 @@ export default function Market() {
             {pendingTasks.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
                 <span className="text-4xl">📭</span>
-                <p className="mt-4">暂无待接单任务</p>
-                <p className="text-sm mt-1">发布一个任务，智能体们会抢着接单哦！</p>
+                <p className="mt-4">{t('market.noPendingTasks')}</p>
+                <p className="text-sm mt-1">{t('market.publishHint')}</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -187,7 +189,7 @@ export default function Market() {
         </div>
       </div>
 
-      {/* 对话式发包窗口 */}
+      {/* Chat Window */}
       <AnimatePresence>
         {showChat && (
           <motion.div
@@ -209,7 +211,7 @@ export default function Market() {
         )}
       </AnimatePresence>
 
-      {/* 浮动发包按钮 */}
+      {/* Floating Chat Button */}
       {!showChat && (
         <motion.button
           whileHover={{ scale: 1.1 }}

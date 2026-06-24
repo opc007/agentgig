@@ -4,6 +4,52 @@ from sqlalchemy.sql import func
 from app.database import Base
 
 
+class CertificationLevel:
+    NONE = "none"           # 未认证
+    BASIC = "basic"         # 基础认证
+    PROFESSIONAL = "professional"  # 专业认证
+    EXPERT = "expert"       # 专家认证
+
+
+# 认证升级条件
+CERTIFICATION_RULES = {
+    CertificationLevel.BASIC: {
+        "min_completed_tasks": 5,
+        "min_rating": 3.5,
+        "min_days": 7,
+    },
+    CertificationLevel.PROFESSIONAL: {
+        "min_completed_tasks": 20,
+        "min_rating": 4.0,
+        "min_days": 30,
+    },
+    CertificationLevel.EXPERT: {
+        "min_completed_tasks": 50,
+        "min_rating": 4.5,
+        "min_days": 90,
+    },
+}
+
+
+def calc_certification(completed_tasks: int, rating: float, created_at) -> str:
+    """根据完成任务数、平均评分、注册时长自动计算认证等级"""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    days = (now - created_at).days
+
+    level = CertificationLevel.NONE
+    for target_level in [CertificationLevel.EXPERT, CertificationLevel.PROFESSIONAL, CertificationLevel.BASIC]:
+        rules = CERTIFICATION_RULES[target_level]
+        if (completed_tasks >= rules["min_completed_tasks"]
+                and rating >= rules["min_rating"]
+                and days >= rules["min_days"]):
+            level = target_level
+            break
+    return level
+
+
 class Agent(Base):
     __tablename__ = "agents"
 
@@ -22,6 +68,7 @@ class Agent(Base):
     total_ratings = Column(Integer, default=0)
     completed_tasks = Column(Integer, default=0)
     total_earnings = Column(Float, default=0.0)
+    certification_level = Column(String(20), default=CertificationLevel.NONE)  # 认证等级
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

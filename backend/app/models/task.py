@@ -24,7 +24,105 @@ class TaskCategory(str, enum.Enum):
     DATA_ANALYSIS = "data_analysis" # 数据分析
     TRANSLATION = "translation"     # 翻译
     VIDEO = "video"                 # 视频制作
+    MUSIC = "music"                 # 音乐
+    MARKETING = "marketing"         # 市场营销
+    CUSTOMER_SERVICE = "customer_service"  # 客户服务
+    HUMAN_RESOURCES = "human_resources"    # 人力资源
+    LEGAL = "legal"                 # 法律
+    FINANCE = "finance"             # 财务
     OTHER = "other"                 # 其他
+
+
+# 分类与子分类映射
+CATEGORY_SUBCATEGORIES = {
+    TaskCategory.COPYWRITING: [
+        {"value": "article", "label": "文章撰写"},
+        {"value": "marketing_copy", "label": "营销文案"},
+        {"value": "social_media", "label": "社交媒体内容"},
+        {"value": "technical_writing", "label": "技术文档"},
+        {"value": "creative_writing", "label": "创意写作"},
+        {"value": "other_copywriting", "label": "其他文案"},
+    ],
+    TaskCategory.DESIGN: [
+        {"value": "logo", "label": "Logo设计"},
+        {"value": "ui_ux", "label": "UI/UX设计"},
+        {"value": "graphic", "label": "平面设计"},
+        {"value": "web_design", "label": "网页设计"},
+        {"value": "illustration", "label": "插画设计"},
+        {"value": "other_design", "label": "其他设计"},
+    ],
+    TaskCategory.DEVELOPMENT: [
+        {"value": "web_dev", "label": "Web开发"},
+        {"value": "mobile_dev", "label": "移动开发"},
+        {"value": "api_dev", "label": "API开发"},
+        {"value": "scripting", "label": "脚本开发"},
+        {"value": "database", "label": "数据库开发"},
+        {"value": "devops", "label": "DevOps"},
+        {"value": "other_dev", "label": "其他开发"},
+    ],
+    TaskCategory.DATA_ANALYSIS: [
+        {"value": "data_processing", "label": "数据处理"},
+        {"value": "visualization", "label": "数据可视化"},
+        {"value": "machine_learning", "label": "机器学习"},
+        {"value": "statistical_analysis", "label": "统计分析"},
+        {"value": "other_data", "label": "其他数据分析"},
+    ],
+    TaskCategory.TRANSLATION: [
+        {"value": "document_translation", "label": "文档翻译"},
+        {"value": "website_translation", "label": "网站翻译"},
+        {"value": "software_localization", "label": "软件本地化"},
+        {"value": "interpretation", "label": "口译服务"},
+        {"value": "other_translation", "label": "其他翻译"},
+    ],
+    TaskCategory.VIDEO: [
+        {"value": "video_editing", "label": "视频剪辑"},
+        {"value": "animation", "label": "动画制作"},
+        {"value": "video_production", "label": "视频拍摄"},
+        {"value": "subtitle", "label": "字幕制作"},
+        {"value": "other_video", "label": "其他视频"},
+    ],
+    TaskCategory.MUSIC: [
+        {"value": "music_production", "label": "音乐制作"},
+        {"value": "audio_editing", "label": "音频剪辑"},
+        {"value": "voice_over", "label": "配音服务"},
+        {"value": "sound_design", "label": "音效设计"},
+        {"value": "other_music", "label": "其他音乐"},
+    ],
+    TaskCategory.MARKETING: [
+        {"value": "social_media_marketing", "label": "社交媒体营销"},
+        {"value": "seo", "label": "SEO优化"},
+        {"value": "content_marketing", "label": "内容营销"},
+        {"value": "email_marketing", "label": "邮件营销"},
+        {"value": "other_marketing", "label": "其他营销"},
+    ],
+    TaskCategory.CUSTOMER_SERVICE: [
+        {"value": "customer_support", "label": "客户支持"},
+        {"value": "chat_support", "label": "在线客服"},
+        {"value": "technical_support", "label": "技术支持"},
+        {"value": "other_service", "label": "其他服务"},
+    ],
+    TaskCategory.HUMAN_RESOURCES: [
+        {"value": "recruitment", "label": "招聘服务"},
+        {"value": "training", "label": "培训服务"},
+        {"value": "performance", "label": "绩效管理"},
+        {"value": "other_hr", "label": "其他人力资源"},
+    ],
+    TaskCategory.LEGAL: [
+        {"value": "contract_review", "label": "合同审查"},
+        {"value": "legal_consulting", "label": "法律咨询"},
+        {"value": "compliance", "label": "合规服务"},
+        {"value": "other_legal", "label": "其他法律"},
+    ],
+    TaskCategory.FINANCE: [
+        {"value": "accounting", "label": "会计服务"},
+        {"value": "tax", "label": "税务服务"},
+        {"value": "financial_analysis", "label": "财务分析"},
+        {"value": "other_finance", "label": "其他财务"},
+    ],
+    TaskCategory.OTHER: [
+        {"value": "other", "label": "其他任务"},
+    ],
+}
 
 
 class Task(Base):
@@ -38,6 +136,7 @@ class Task(Base):
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=False)
     category = Column(String(50), nullable=False)
+    sub_category = Column(String(50), nullable=True)  # 子分类
     required_skills = Column(JSON, default=list)  # 所需技能标签
     requirements = Column(Text, nullable=True)  # 详细需求说明
 

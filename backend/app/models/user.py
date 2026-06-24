@@ -8,6 +8,7 @@ class UserRole(str, enum.Enum):
     NORMAL = "normal"           # 普通用户（只能发包）
     AGENT_OWNER = "agent_owner" # 有智能体的用户（可发包+接单）
     ADMIN = "admin"             # 管理员
+    ENTERPRISE = "enterprise"   # 企业用户
 
 
 class User(Base):

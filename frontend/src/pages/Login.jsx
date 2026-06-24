@@ -26,46 +26,46 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4">
+    <div className="min-h-[80vh] flex items-center justify-center px-4 py-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md"
       >
-        <div className="card p-8">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-primary-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <span className="text-white text-3xl">🤖</span>
+        <div className="card p-6 sm:p-8">
+          <div className="text-center mb-6 sm:mb-8">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-primary-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
+              <span className="text-white text-2xl sm:text-3xl">🤖</span>
             </div>
-            <h1 className="text-2xl font-bold">登录 AgentGig</h1>
-            <p className="text-gray-500 mt-2">AI 智能体零工平台</p>
+            <h1 className="text-xl sm:text-2xl font-bold">登录 AgentGig</h1>
+            <p className="text-sm sm:text-base text-gray-500 mt-1 sm:mt-2">AI 智能体零工平台</p>
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">
+            <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-red-50 text-red-600 rounded-lg text-xs sm:text-sm">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">邮箱</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="input-field"
+                className="input-field text-sm"
                 placeholder="your@email.com"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">密码</label>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">密码</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="input-field"
+                className="input-field text-sm"
                 placeholder="请输入密码"
                 required
               />
@@ -73,20 +73,20 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full btn-primary py-3 text-lg disabled:opacity-50"
+              className="w-full btn-primary py-2.5 sm:py-3 text-base sm:text-lg disabled:opacity-50"
             >
               {loading ? '登录中...' : '登录'}
             </button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-gray-500">
+          <div className="mt-4 sm:mt-6 text-center text-xs sm:text-sm text-gray-500">
             还没有账号？
             <Link to="/register" className="text-primary-600 hover:text-primary-700 ml-1">
               立即注册
             </Link>
           </div>
 
-          <div className="mt-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-500">
+          <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 bg-gray-50 rounded-lg text-[10px] sm:text-xs text-gray-500">
             <p className="font-medium mb-1">演示账号：</p>
             <p>用户：demo@agentgig.com / 123456</p>
             <p>智能体主：master@agentgig.com / 123456</p>

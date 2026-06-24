@@ -1,15 +1,20 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import useStore from '../store/useStore'
+import { useI18n } from '../i18n'
 
 export default function Navbar() {
   const { user, logout } = useStore()
   const navigate = useNavigate()
+  const { lang, setLang, t } = useI18n()
 
   const handleLogout = () => {
     logout()
     navigate('/')
   }
+
+  const isAdmin = user?.role === 'admin'
+  const isEnterprise = user?.role === 'enterprise'
 
   return (
     <motion.nav
@@ -28,25 +33,47 @@ export default function Navbar() {
             </span>
           </Link>
 
-          <div className="flex items-center space-x-6">
-            <Link to="/" className="text-gray-600 hover:text-primary-600 transition-colors">
-              市场大厅
+          <div className="flex items-center space-x-4">
+            <Link to="/" className="text-gray-600 hover:text-primary-600 transition-colors text-sm">
+              {t('nav.market')}
             </Link>
-            <Link to="/tasks" className="text-gray-600 hover:text-primary-600 transition-colors">
-              任务公告栏
+            <Link to="/tasks" className="text-gray-600 hover:text-primary-600 transition-colors text-sm">
+              {t('nav.taskBoard')}
+            </Link>
+            <Link to="/community" className="text-gray-600 hover:text-primary-600 transition-colors text-sm">
+              社区
             </Link>
 
             {user ? (
               <>
                 <Link to="/create-task" className="btn-primary text-sm">
-                  发布任务
+                  {t('nav.publishTask')}
                 </Link>
-                <Link to="/dashboard" className="text-gray-600 hover:text-primary-600 transition-colors">
-                  工作台
+                <Link to="/workflows" className="text-gray-600 hover:text-primary-600 transition-colors text-sm">
+                  工作流
                 </Link>
-                <div className="flex items-center space-x-3">
+                <Link to="/learning" className="text-gray-600 hover:text-primary-600 transition-colors text-sm">
+                  学习进化
+                </Link>
+                <Link to="/dashboard" className="text-gray-600 hover:text-primary-600 transition-colors text-sm">
+                  {t('nav.dashboard')}
+                </Link>
+                <Link to="/wallet" className="text-gray-600 hover:text-primary-600 transition-colors text-sm">
+                  钱包
+                </Link>
+                {isEnterprise && (
+                  <Link to="/enterprise" className="text-gray-600 hover:text-primary-600 transition-colors text-sm">
+                    企业
+                  </Link>
+                )}
+                {isAdmin && (
+                  <Link to="/admin/withdrawals" className="text-orange-600 hover:text-orange-700 transition-colors text-sm font-medium">
+                    提现审批
+                  </Link>
+                )}
+                <div className="flex items-center space-x-3 ml-2">
                   <div className="text-sm">
-                    <span className="text-gray-500">余额:</span>
+                    <span className="text-gray-500">{t('nav.balance')}:</span>
                     <span className="text-primary-600 font-bold ml-1">
                       ¥{user.balance?.toFixed(2)}
                     </span>
@@ -57,20 +84,29 @@ export default function Navbar() {
                     </span>
                   </div>
                   <button onClick={handleLogout} className="text-gray-500 hover:text-red-500 text-sm">
-                    退出
+                    {t('nav.logout')}
                   </button>
                 </div>
               </>
             ) : (
               <>
-                <Link to="/login" className="text-gray-600 hover:text-primary-600 transition-colors">
-                  登录
+                <Link to="/login" className="text-gray-600 hover:text-primary-600 transition-colors text-sm">
+                  {t('nav.login')}
                 </Link>
                 <Link to="/register" className="btn-primary text-sm">
-                  注册
+                  {t('nav.register')}
                 </Link>
               </>
             )}
+
+            {/* Language Toggle */}
+            <button
+              onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+              className="px-2 py-1 text-xs font-medium border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
+              title={lang === 'zh' ? 'Switch to English' : '切换到中文'}
+            >
+              {lang === 'zh' ? 'EN' : '中'}
+            </button>
           </div>
         </div>
       </div>

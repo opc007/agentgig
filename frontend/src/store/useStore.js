@@ -19,8 +19,21 @@ const useStore = create((set, get) => ({
   // 交易记录
   transactions: [],
 
+  // 提现记录
+  withdrawals: [],
+
+  // 充值记录
+  deposits: [],
+
+  // 企业
+  enterprise: null,
+  enterpriseMembers: [],
+
   // 平台统计
   stats: null,
+
+  // 管理员 - 待审批提现
+  pendingWithdrawals: [],
 
   // 登录
   login: async (email, password) => {
@@ -45,7 +58,7 @@ const useStore = create((set, get) => ({
   // 退出
   logout: () => {
     localStorage.removeItem('token')
-    set({ token: null, user: null, myAgents: [] })
+    set({ token: null, user: null, myAgents: [], enterprise: null })
     delete api.defaults.headers.common['Authorization']
   },
 
@@ -60,9 +73,105 @@ const useStore = create((set, get) => ({
   },
 
   // 充值
-  deposit: async (amount) => {
-    const res = await api.post('/api/auth/deposit', { amount })
+  deposit: async (amount, paymentMethod = 'alipay') => {
+    const res = await api.post('/api/payment/deposit', { amount, payment_method: paymentMethod })
     await get().fetchUser()
+    return res.data
+  },
+
+  // 获取充值记录
+  fetchDeposits: async () => {
+    const res = await api.get('/api/payment/history')
+    set({ deposits: res.data })
+  },
+
+  // 申请提现
+  withdraw: async (data) => {
+    const res = await api.post('/api/payment/withdraw', data)
+    await get().fetchUser()
+    set(state => ({ withdrawals: [res.data, ...state.withdrawals] }))
+    return res.data
+  },
+
+  // 获取提现记录
+  fetchWithdrawals: async () => {
+    const res = await api.get('/api/payment/withdraw-history')
+    set({ withdrawals: res.data })
+  },
+
+  // 管理员 - 获取待审批提现
+  fetchPendingWithdrawals: async () => {
+    const res = await api.get('/api/payment/withdraw/pending')
+    set({ pendingWithdrawals: res.data })
+  },
+
+  // 管理员 - 审批提现
+  reviewWithdrawal: async (withdrawalId, action, rejectReason = '') => {
+    const res = await api.put(`/api/payment/withdraw/${withdrawalId}/approve`, {
+      action,
+      reject_reason: rejectReason,
+    })
+    // 从待审批列表移除
+    set(state => ({
+      pendingWithdrawals: state.pendingWithdrawals.filter(w => w.id !== withdrawalId)
+    }))
+    return res.data
+  },
+
+  // 企业 - 获取我的企业
+  fetchEnterprise: async () => {
+    try {
+      const res = await api.get('/api/enterprise/me')
+      set({ enterprise: res.data })
+    } catch {
+      set({ enterprise: null })
+    }
+  },
+
+  // 企业 - 创建企业
+  createEnterprise: async (data) => {
+    const res = await api.post('/api/enterprise', data)
+    set({ enterprise: res.data })
+    await get().fetchUser()
+    return res.data
+  },
+
+  // 企业 - 获取成员列表
+  fetchEnterpriseMembers: async () => {
+    const res = await api.get('/api/enterprise/members')
+    set({ enterpriseMembers: res.data })
+  },
+
+  // 企业 - 邀请成员
+  inviteMember: async (email, role = 'member') => {
+    const res = await api.post('/api/enterprise/members/invite', { email, role })
+    await get().fetchEnterpriseMembers()
+    return res.data
+  },
+
+  // 企业 - 更新成员权限
+  updateMember: async (memberId, data) => {
+    const res = await api.put(`/api/enterprise/members/${memberId}`, data)
+    await get().fetchEnterpriseMembers()
+    return res.data
+  },
+
+  // 企业 - 移除成员
+  removeMember: async (memberId) => {
+    const res = await api.delete(`/api/enterprise/members/${memberId}`)
+    await get().fetchEnterpriseMembers()
+    return res.data
+  },
+
+  // 企业 - 批量发布任务
+  batchCreateTasks: async (tasks) => {
+    const res = await api.post('/api/enterprise/tasks/batch', { tasks })
+    return res.data
+  },
+
+  // 企业 - 统计数据
+  fetchEnterpriseStats: async () => {
+    const res = await api.get('/api/enterprise/stats')
     return res.data
   },
 
@@ -152,6 +261,14 @@ const useStore = create((set, get) => ({
   fetchTransactions: async () => {
     const res = await api.get('/api/tasks/transactions')
     set({ transactions: res.data })
+  },
+
+  // 获取价格参考
+  fetchPriceGuidance: async (category, subCategory) => {
+    const params = { category }
+    if (subCategory) params.sub_category = subCategory
+    const res = await api.get('/api/tasks/price-guidance', { params })
+    return res.data
   },
 
   // 获取平台统计

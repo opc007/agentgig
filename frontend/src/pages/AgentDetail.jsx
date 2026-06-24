@@ -3,21 +3,53 @@ import { useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import api from '../services/api'
 import AgentCharacter from '../components/AgentCharacter'
+import { useI18n } from '../i18n'
 
 export default function AgentDetail() {
   const { id } = useParams()
   const [agent, setAgent] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [ratings, setRatings] = useState([])
+  const [ratingStats, setRatingStats] = useState(null)
+  const { t } = useI18n()
 
   useEffect(() => {
-    api.get(`/api/agents/${id}`)
-      .then(res => setAgent(res.data))
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    loadAgent()
+    loadRatings()
+    loadRatingStats()
   }, [id])
 
-  if (loading) return <div className="text-center py-20 text-gray-400">加载中...</div>
-  if (!agent) return <div className="text-center py-20 text-gray-400">智能体不存在</div>
+  const loadAgent = async () => {
+    try {
+      const res = await api.get(`/api/agents/${id}`)
+      setAgent(res.data)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadRatings = async () => {
+    try {
+      const res = await api.get(`/api/ratings/agent/${id}`)
+      setRatings(res.data)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const loadRatingStats = async () => {
+    try {
+      const res = await api.get(`/api/ratings/agent/${id}/stats`)
+      setRatingStats(res.data)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  if (loading) return <div className="text-center py-20 text-gray-400">{t('agentDetail.loading')}</div>
+  if (!agent) return <div className="text-center py-20 text-gray-400">{t('agentDetail.agentNotFound')}</div>
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -34,13 +66,13 @@ export default function AgentDetail() {
                   agent.status === 'busy' ? 'bg-yellow-100 text-yellow-700' :
                   'bg-gray-100 text-gray-700'
                 }`}>
-                  {agent.status === 'online' ? '在线' : agent.status === 'busy' ? '忙碌' : '离线'}
+                  {agent.status === 'online' ? t('agentDetail.online') : agent.status === 'busy' ? t('agentDetail.busy') : t('agentDetail.offline')}
                 </span>
                 <span className="text-sm text-gray-500">
-                  评分：⭐ {agent.rating.toFixed(1)}
+                  {t('agentDetail.rating')}: ⭐ {agent.rating.toFixed(1)}
                 </span>
                 <span className="text-sm text-gray-500">
-                  完成：{agent.completed_tasks} 单
+                  {t('agentDetail.completedCount')}: {agent.completed_tasks} {t('agentDetail.singleUnit')}
                 </span>
               </div>
             </div>
@@ -49,16 +81,16 @@ export default function AgentDetail() {
           <div className="grid grid-cols-2 gap-4 mb-8">
             <div className="p-4 bg-primary-50 rounded-xl text-center">
               <div className="text-3xl font-bold text-primary-600">{agent.completed_tasks}</div>
-              <div className="text-sm text-gray-500">完成任务</div>
+              <div className="text-sm text-gray-500">{t('agentDetail.completedTasks')}</div>
             </div>
             <div className="p-4 bg-green-50 rounded-xl text-center">
               <div className="text-3xl font-bold text-green-600">¥{agent.total_earnings.toFixed(0)}</div>
-              <div className="text-sm text-gray-500">累计收入</div>
+              <div className="text-sm text-gray-500">{t('agentDetail.totalEarnings')}</div>
             </div>
           </div>
 
           <div>
-            <h2 className="text-lg font-bold mb-3">技能标签</h2>
+            <h2 className="text-lg font-bold mb-3">{t('agentDetail.skillTags')}</h2>
             <div className="flex flex-wrap gap-2">
               {(agent.skills || []).map(skill => (
                 <span key={skill} className="px-4 py-2 bg-primary-50 text-primary-600 rounded-full text-sm font-medium">

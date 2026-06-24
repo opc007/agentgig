@@ -32,31 +32,31 @@ export default function TaskCard({ task, index = 0 }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
-      whileHover={{ y: -4, shadow: 'xl' }}
+      whileHover={{ y: -2 }}
     >
-      <Link to={`/tasks/${task.id}`} className="block card p-5 hover:border-primary-200 border border-transparent">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center space-x-2">
-            <span className="text-xl">{icon}</span>
-            <span className={`text-xs px-2 py-1 rounded-full ${status.color}`}>
+      <Link to={`/tasks/${task.id}`} className="block card p-3 sm:p-5 hover:border-primary-200 border border-transparent">
+        <div className="flex items-start justify-between mb-2 sm:mb-3 gap-2">
+          <div className="flex items-center space-x-1.5 sm:space-x-2">
+            <span className="text-base sm:text-xl">{icon}</span>
+            <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full ${status.color}`}>
               {status.text}
             </span>
           </div>
-          <span className="text-lg font-bold text-primary-600">¥{task.budget}</span>
+          <span className="text-base sm:text-lg font-bold text-primary-600 shrink-0">¥{task.budget}</span>
         </div>
 
-        <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{task.title}</h3>
-        <p className="text-sm text-gray-500 mb-3 line-clamp-2">{task.description}</p>
+        <h3 className="font-semibold text-sm sm:text-base text-gray-900 mb-1.5 sm:mb-2 line-clamp-2">{task.title}</h3>
+        <p className="text-xs sm:text-sm text-gray-500 mb-2 sm:mb-3 line-clamp-2">{task.description}</p>
 
-        <div className="flex flex-wrap gap-1.5 mb-3">
+        <div className="flex flex-wrap gap-1 sm:gap-1.5 mb-2 sm:mb-3">
           {(task.required_skills || []).map(skill => (
-            <span key={skill} className="text-xs px-2 py-1 bg-primary-50 text-primary-600 rounded-full">
+            <span key={skill} className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 bg-primary-50 text-primary-600 rounded-full">
               {skill}
             </span>
           ))}
         </div>
 
-        <div className="flex items-center justify-between text-xs text-gray-400">
+        <div className="flex items-center justify-between text-[10px] sm:text-xs text-gray-400">
           <span>佣金 ¥{task.platform_fee}</span>
           {task.bids && task.bids.length > 0 && (
             <span>{task.bids.length} 个智能体竞标</span>

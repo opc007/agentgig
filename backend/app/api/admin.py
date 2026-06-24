@@ -1,16 +1,20 @@
 """
 平台管理 API —— 给平台管理智能体和管理员使用
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from datetime import datetime
+from sqlalchemy import func, case, extract
+from datetime import datetime, timedelta
 from app.database import get_db
 from app.models.user import User
 from app.models.agent import Agent
-from app.models.task import Task, TaskStatus
+from app.models.task import Task, TaskStatus, TaskCategory, CATEGORY_SUBCATEGORIES
 from app.models.transaction import Transaction
-from app.schemas import PlatformStats
+from app.models.message import Message
+from app.schemas import (
+    PlatformStats, DashboardOverview, TrendPoint,
+    TopAgentItem, CategoryStatItem, RecentTransactionItem,
+)
 from app.auth import get_current_user
 
 router = APIRouter(prefix="/api/admin", tags=["平台管理"])
@@ -44,6 +48,246 @@ async def get_disputed_tasks(
     require_admin(current_user)
     tasks = db.query(Task).filter(Task.status == TaskStatus.DISPUTED).all()
     return [{"id": t.id, "title": t.title, "publisher_id": t.publisher_id, "agent_id": t.assigned_agent_id, "budget": t.budget} for t in tasks]
+
+
+@router.get("/dashboard", response_model=DashboardOverview)
+async def get_dashboard_overview(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """平台总览数据（需要管理员权限）"""
+    require_admin(current_user)
+
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    total_tasks = db.query(Task).count()
+    completed_tasks = db.query(Task).filter(Task.status == TaskStatus.COMPLETED).count()
+    completion_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+
+    total_revenue = db.query(func.sum(Transaction.amount)).filter(
+        Transaction.tx_type.in_(["escrow", "release", "commission"]),
+        Transaction.status == "completed"
+    ).scalar() or 0
+
+    platform_commission = db.query(func.sum(Transaction.amount)).filter(
+        Transaction.tx_type == "commission",
+        Transaction.status == "completed"
+    ).scalar() or 0
+
+    return DashboardOverview(
+        total_users=db.query(User).count(),
+        total_agents=db.query(Agent).count(),
+        total_tasks=total_tasks,
+        completed_tasks=completed_tasks,
+        completion_rate=round(completion_rate, 1),
+        total_revenue=round(total_revenue, 2),
+        platform_commission=round(platform_commission, 2),
+        online_agents=db.query(Agent).filter(Agent.status == "online").count(),
+        pending_tasks=db.query(Task).filter(Task.status == TaskStatus.PENDING).count(),
+        disputed_tasks=db.query(Task).filter(Task.status == TaskStatus.DISPUTED).count(),
+        new_users_today=db.query(User).filter(User.created_at >= today_start).count(),
+        new_tasks_today=db.query(Task).filter(Task.created_at >= today_start).count(),
+    )
+
+
+@router.get("/trends", response_model=list[TrendPoint])
+async def get_trend_data(
+    period: str = Query("daily", regex="^(daily|weekly|monthly)$"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """趋势数据（需要管理员权限）"""
+    require_admin(current_user)
+
+    now = datetime.utcnow()
+    results = []
+
+    if period == "daily":
+        for i in range(6, -1, -1):
+            day_start = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day_start + timedelta(days=1)
+            label = day_start.strftime("%m/%d")
+
+            tasks_created = db.query(Task).filter(
+                Task.created_at >= day_start, Task.created_at < day_end
+            ).count()
+            tasks_completed = db.query(Task).filter(
+                Task.completed_at >= day_start, Task.completed_at < day_end
+            ).count()
+            revenue = db.query(func.sum(Transaction.amount)).filter(
+                Transaction.created_at >= day_start,
+                Transaction.created_at < day_end,
+                Transaction.tx_type.in_(["release", "commission"]),
+                Transaction.status == "completed"
+            ).scalar() or 0
+
+            results.append(TrendPoint(
+                label=label,
+                tasks_created=tasks_created,
+                tasks_completed=tasks_completed,
+                revenue=round(revenue, 2),
+            ))
+
+    elif period == "weekly":
+        for i in range(3, -1, -1):
+            week_start = (now - timedelta(weeks=i + 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            week_end = week_start + timedelta(weeks=1)
+            label = f"{week_start.strftime('%m/%d')}周"
+
+            tasks_created = db.query(Task).filter(
+                Task.created_at >= week_start, Task.created_at < week_end
+            ).count()
+            tasks_completed = db.query(Task).filter(
+                Task.completed_at >= week_start, Task.completed_at < week_end
+            ).count()
+            revenue = db.query(func.sum(Transaction.amount)).filter(
+                Transaction.created_at >= week_start,
+                Transaction.created_at < week_end,
+                Transaction.tx_type.in_(["release", "commission"]),
+                Transaction.status == "completed"
+            ).scalar() or 0
+
+            results.append(TrendPoint(
+                label=label,
+                tasks_created=tasks_created,
+                tasks_completed=tasks_completed,
+                revenue=round(revenue, 2),
+            ))
+
+    elif period == "monthly":
+        for i in range(5, -1, -1):
+            month_start = (now.replace(day=1) - timedelta(days=i * 30)).replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            )
+            if month_start.month == 12:
+                month_end = month_start.replace(year=month_start.year + 1, month=1)
+            else:
+                month_end = month_start.replace(month=month_start.month + 1)
+            label = month_start.strftime("%Y/%m")
+
+            tasks_created = db.query(Task).filter(
+                Task.created_at >= month_start, Task.created_at < month_end
+            ).count()
+            tasks_completed = db.query(Task).filter(
+                Task.completed_at >= month_start, Task.completed_at < month_end
+            ).count()
+            revenue = db.query(func.sum(Transaction.amount)).filter(
+                Transaction.created_at >= month_start,
+                Transaction.created_at < month_end,
+                Transaction.tx_type.in_(["release", "commission"]),
+                Transaction.status == "completed"
+            ).scalar() or 0
+
+            results.append(TrendPoint(
+                label=label,
+                tasks_created=tasks_created,
+                tasks_completed=tasks_completed,
+                revenue=round(revenue, 2),
+            ))
+
+    return results
+
+
+@router.get("/top-agents", response_model=list[TopAgentItem])
+async def get_top_agents(
+    limit: int = Query(10, ge=1, le=50),
+    sort_by: str = Query("completed_tasks", regex="^(completed_tasks|rating|total_earnings)$"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """智能体排行榜（需要管理员权限）"""
+    require_admin(current_user)
+
+    sort_column = {
+        "completed_tasks": Agent.completed_tasks,
+        "rating": Agent.rating,
+        "total_earnings": Agent.total_earnings,
+    }[sort_by]
+
+    agents = db.query(Agent).order_by(sort_column.desc()).limit(limit).all()
+
+    return [TopAgentItem(
+        id=a.id,
+        name=a.name,
+        avatar_color=a.avatar_color,
+        avatar_icon=a.avatar_icon,
+        rating=a.rating,
+        completed_tasks=a.completed_tasks,
+        total_earnings=round(a.total_earnings, 2),
+        category=a.category,
+    ) for a in agents]
+
+
+CATEGORY_LABELS = {
+    "copywriting": "文案写作",
+    "design": "设计",
+    "development": "开发",
+    "data_analysis": "数据分析",
+    "translation": "翻译",
+    "video": "视频制作",
+    "music": "音乐",
+    "marketing": "市场营销",
+    "customer_service": "客户服务",
+    "human_resources": "人力资源",
+    "legal": "法律",
+    "finance": "财务",
+    "other": "其他",
+}
+
+
+@router.get("/category-stats", response_model=list[CategoryStatItem])
+async def get_category_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """分类统计（需要管理员权限）"""
+    require_admin(current_user)
+
+    total_tasks = db.query(Task).count() or 1
+
+    rows = db.query(
+        Task.category,
+        func.count(Task.id).label("count"),
+        func.sum(Task.budget).label("total_budget"),
+    ).group_by(Task.category).all()
+
+    return [CategoryStatItem(
+        category=row.category,
+        label=CATEGORY_LABELS.get(row.category, row.category),
+        count=row.count,
+        total_budget=round(row.total_budget or 0, 2),
+        percentage=round(row.count / total_tasks * 100, 1),
+    ) for row in sorted(rows, key=lambda r: r.count, reverse=True)]
+
+
+@router.get("/recent-transactions", response_model=list[RecentTransactionItem])
+async def get_recent_transactions(
+    limit: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """最近交易列表（需要管理员权限）"""
+    require_admin(current_user)
+
+    txs = db.query(Transaction).order_by(Transaction.created_at.desc()).limit(limit).all()
+
+    results = []
+    for tx in txs:
+        from_user = db.query(User).filter(User.id == tx.from_user_id).first() if tx.from_user_id else None
+        to_user = db.query(User).filter(User.id == tx.to_user_id).first() if tx.to_user_id else None
+        task = db.query(Task).filter(Task.id == tx.task_id).first() if tx.task_id else None
+
+        results.append(RecentTransactionItem(
+            id=tx.id,
+            amount=tx.amount,
+            tx_type=tx.tx_type,
+            description=tx.description,
+            created_at=tx.created_at,
+            from_username=from_user.username if from_user else None,
+            to_username=to_user.username if to_user else None,
+            task_title=task.title if task else None,
+        ))
+
+    return results
 
 
 @router.post("/tasks/{task_id}/resolve")
@@ -98,6 +342,7 @@ async def seed_demo_data(db: Session = Depends(get_db)):
 
     # 创建演示用户（防重复）
     demo_users = [
+        {"username": "admin", "email": "admin@agentgig.com", "role": "admin", "trial_balance": 99999},
         {"username": "demo_user", "email": "demo@agentgig.com", "role": "normal", "trial_balance": 5000},
         {"username": "agent_master", "email": "master@agentgig.com", "role": "agent_owner", "trial_balance": 3000, "alipay_account": "master@alipay.com"},
         {"username": "creator_zhang", "email": "zhang@agentgig.com", "role": "agent_owner", "trial_balance": 2000},

@@ -68,15 +68,15 @@ export default function ChatWindow({ onComplete }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden flex flex-col h-[500px]">
-      <div className="bg-gradient-to-r from-primary-500 to-purple-600 px-4 py-3">
-        <h3 className="text-white font-medium flex items-center space-x-2">
+    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden flex flex-col h-[400px] sm:h-[500px]">
+      <div className="bg-gradient-to-r from-primary-500 to-purple-600 px-3 sm:px-4 py-2.5 sm:py-3">
+        <h3 className="text-white font-medium flex items-center space-x-2 text-sm sm:text-base">
           <span>🤖</span>
           <span>智能需求助手</span>
         </h3>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
         <AnimatePresence>
           {messages.map((msg, i) => (
             <motion.div
@@ -85,12 +85,12 @@ export default function ChatWindow({ onComplete }) {
               animate={{ opacity: 1, y: 0 }}
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl ${
+              <div className={`max-w-[85%] sm:max-w-[80%] px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl ${
                 msg.role === 'user'
                   ? 'bg-primary-500 text-white rounded-br-md'
                   : 'bg-gray-100 text-gray-800 rounded-bl-md'
               }`}>
-                <p className="text-sm whitespace-pre-line">{msg.content}</p>
+                <p className="text-xs sm:text-sm whitespace-pre-line">{msg.content}</p>
               </div>
             </motion.div>
           ))}
@@ -98,8 +98,8 @@ export default function ChatWindow({ onComplete }) {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t p-3">
-        <div className="flex space-x-2">
+      <div className="border-t p-2.5 sm:p-3">
+        <div className="flex gap-2">
           <input
             type="text"
             value={input}
@@ -108,7 +108,7 @@ export default function ChatWindow({ onComplete }) {
             placeholder="输入你的需求..."
             className="input-field text-sm"
           />
-          <button onClick={sendMessage} className="btn-primary px-4">
+          <button onClick={sendMessage} className="btn-primary px-3 sm:px-4 text-sm shrink-0">
             发送
           </button>
         </div>

@@ -8,12 +8,86 @@ from app.models.agent import Agent
 from app.models.task import Task, TaskStatus
 from app.models.transaction import Transaction
 from app.models.message import Message
+from app.models.task import CATEGORY_SUBCATEGORIES
 from app.schemas import TaskCreate, TaskResponse, TaskBid, TaskSubmit, MessageCreate, MessageResponse
 from app.auth import get_current_user
 
 router = APIRouter(prefix="/api/tasks", tags=["任务"])
 
 PLATFORM_FEE_RATE = 0.10
+
+
+@router.get("/categories")
+async def get_categories():
+    """获取所有任务分类和子分类"""
+    categories = []
+    for cat, subs in CATEGORY_SUBCATEGORIES.items():
+        categories.append({
+            "value": cat.value,
+            "label": {
+                "copywriting": "文案写作",
+                "design": "设计",
+                "development": "开发",
+                "data_analysis": "数据分析",
+                "translation": "翻译",
+                "video": "视频制作",
+                "music": "音乐",
+                "marketing": "市场营销",
+                "customer_service": "客户服务",
+                "human_resources": "人力资源",
+                "legal": "法律",
+                "finance": "财务",
+                "other": "其他",
+            }.get(cat.value, cat.value),
+            "subcategories": subs,
+        })
+    return categories
+
+
+@router.get("/price-guidance")
+async def get_price_guidance(
+    category: str = Query(..., description="任务分类"),
+    sub_category: Optional[str] = Query(None, description="子分类"),
+    db: Session = Depends(get_db)
+):
+    """获取同类任务的参考价格区间"""
+    query = db.query(Task).filter(
+        Task.category == category,
+        Task.status.in_([TaskStatus.COMPLETED, TaskStatus.SUBMITTED, TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS])
+    )
+    if sub_category:
+        query = query.filter(Task.sub_category == sub_category)
+
+    tasks = query.all()
+
+    if not tasks:
+        # 没有历史数据时返回默认参考价格
+        default_ranges = {
+            "copywriting": {"min": 50, "max": 500, "avg": 200},
+            "design": {"min": 100, "max": 2000, "avg": 500},
+            "development": {"min": 200, "max": 5000, "avg": 1500},
+            "data_analysis": {"min": 100, "max": 1500, "avg": 500},
+            "translation": {"min": 50, "max": 800, "avg": 300},
+            "video": {"min": 200, "max": 3000, "avg": 800},
+            "music": {"min": 100, "max": 2000, "avg": 500},
+            "marketing": {"min": 100, "max": 2000, "avg": 600},
+            "customer_service": {"min": 50, "max": 500, "avg": 200},
+            "human_resources": {"min": 100, "max": 1500, "avg": 500},
+            "legal": {"min": 200, "max": 3000, "avg": 800},
+            "finance": {"min": 150, "max": 2000, "avg": 600},
+            "other": {"min": 50, "max": 1000, "avg": 300},
+        }
+        result = default_ranges.get(category, {"min": 50, "max": 1000, "avg": 300})
+        result["sample_count"] = 0
+        return result
+
+    budgets = [t.budget for t in tasks]
+    return {
+        "min": round(min(budgets), 2),
+        "max": round(max(budgets), 2),
+        "avg": round(sum(budgets) / len(budgets), 2),
+        "sample_count": len(tasks),
+    }
 
 
 @router.post("", response_model=TaskResponse)
@@ -47,6 +121,7 @@ async def create_task(
         title=data.title,
         description=data.description,
         category=data.category,
+        sub_category=data.sub_category,
         required_skills=data.required_skills,
         requirements=data.requirements,
         budget=data.budget,
@@ -288,6 +363,13 @@ async def approve_task(
     db.add(Transaction(task_id=task.id, from_user_id=current_user.id, to_user_id=agent_owner.id, amount=task.agent_income, tx_type="release", description=f"任务结算: {task.title}"))
     db.add(Transaction(task_id=task.id, from_user_id=current_user.id, amount=task.platform_fee, tx_type="commission", description=f"平台佣金: {task.title}"))
     db.commit()
+
+    # 自动刷新认证等级
+    from app.models.agent import calc_certification
+    new_level = calc_certification(agent.completed_tasks, agent.rating, agent.created_at)
+    if new_level != agent.certification_level:
+        agent.certification_level = new_level
+        db.commit()
 
     return {"message": "验收通过，已完成结算", "agent_income": task.agent_income, "platform_fee": task.platform_fee}
 
