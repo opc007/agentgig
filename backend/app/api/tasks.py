@@ -25,10 +25,21 @@ async def create_task(
     """发布新任务（发包）"""
     platform_fee = data.budget * PLATFORM_FEE_RATE
 
-    if current_user.balance < data.budget:
-        raise HTTPException(status_code=400, detail=f"余额不足，需要 {data.budget}，当前余额 {current_user.balance}")
+    # 优先使用体验金，不够再用余额
+    total_available = current_user.trial_balance + current_user.balance
+    if total_available < data.budget:
+        raise HTTPException(status_code=400, detail=f"余额不足，需要 {data.budget}，当前可用 {total_available}")
 
-    current_user.balance -= data.budget
+    # 先扣体验金，再扣余额
+    remaining = data.budget
+    if current_user.trial_balance >= remaining:
+        current_user.trial_balance -= remaining
+        remaining = 0
+    else:
+        remaining -= current_user.trial_balance
+        current_user.trial_balance = 0
+        current_user.balance -= remaining
+
     current_user.frozen_balance += data.budget
 
     task = Task(
@@ -110,8 +121,36 @@ async def get_my_accepted_tasks(
     agent_ids = [a.id for a in db.query(Agent).filter(Agent.owner_id == current_user.id).all()]
     if not agent_ids:
         return []
-    tasks = db.query(Task).filter(Task.assigned_agent_id.in_(agent_ids)).order_by(Task.created_at.desc()).all()
+    tasks = db.query(Task).filter(
+        Task.assigned_agent_id.in_(agent_ids)
+    ).order_by(Task.created_at.desc()).all()
     return [TaskResponse.model_validate(t) for t in tasks]
+
+
+@router.get("/transactions")
+async def get_transactions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取当前用户的交易记录"""
+    txs = db.query(Transaction).filter(
+        (Transaction.from_user_id == current_user.id) | (Transaction.to_user_id == current_user.id)
+    ).order_by(Transaction.created_at.desc()).all()
+
+    result = []
+    for tx in txs:
+        direction = "out" if tx.from_user_id == current_user.id else "in"
+        result.append({
+            "id": tx.id,
+            "task_id": tx.task_id,
+            "amount": tx.amount,
+            "tx_type": tx.tx_type,
+            "status": tx.status,
+            "description": tx.description,
+            "direction": direction,
+            "created_at": tx.created_at.isoformat() if tx.created_at else None,
+        })
+    return result
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
@@ -142,6 +181,10 @@ async def bid_task(
         raise HTTPException(status_code=404, detail="智能体不存在或不属于你")
     if agent.status != "online":
         raise HTTPException(status_code=400, detail="智能体需要在线才能竞标")
+
+    # 竞标价格校验：不能超过预算的3倍
+    if data.price > task.budget * 3:
+        raise HTTPException(status_code=400, detail=f"竞标价格不能超过预算的3倍（¥{task.budget * 3}）")
 
     bids = task.bids or []
     if any(b.get("agent_id") == data.agent_id for b in bids):
@@ -204,8 +247,8 @@ async def submit_deliverable(
     if task.status not in [TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS, TaskStatus.REVISION]:
         raise HTTPException(status_code=400, detail="任务状态不允许提交")
 
-    agent = db.query(Agent).filter(Agent.id == task.assigned_agent_id, Agent.owner_id == current_user.id).first()
-    if not agent:
+    agent = db.query(Agent).filter(Agent.id == task.assigned_agent_id).first()
+    if not agent or agent.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="无权操作此任务")
 
     task.deliverable_url = data.deliverable_url
@@ -242,7 +285,7 @@ async def approve_task(
     task.status = TaskStatus.COMPLETED
     task.completed_at = datetime.utcnow()
 
-    db.add(Transaction(task_id=task.id, to_user_id=agent_owner.id, amount=task.agent_income, tx_type="release", description=f"任务结算: {task.title}"))
+    db.add(Transaction(task_id=task.id, from_user_id=current_user.id, to_user_id=agent_owner.id, amount=task.agent_income, tx_type="release", description=f"任务结算: {task.title}"))
     db.add(Transaction(task_id=task.id, from_user_id=current_user.id, amount=task.platform_fee, tx_type="commission", description=f"平台佣金: {task.title}"))
     db.commit()
 
@@ -272,6 +315,18 @@ async def reject_task(
     task.status = TaskStatus.REVISION
     db.commit()
 
+    # 添加返工消息通知
+    msg = Message(
+        task_id=task_id,
+        sender_id=current_user.id,
+        sender_type="user",
+        sender_name=current_user.username,
+        content=f"要求返工（第{task.revision_count}次）：{reason}" if reason else f"要求返工（第{task.revision_count}次）",
+        message_type="system",
+    )
+    db.add(msg)
+    db.commit()
+
     return {"message": f"已要求返工（第{task.revision_count}次）"}
 
 
@@ -288,8 +343,9 @@ async def cancel_task(
     if task.status not in [TaskStatus.PENDING, TaskStatus.BIDDING]:
         raise HTTPException(status_code=400, detail="任务已被接单，无法取消")
 
-    current_user.balance += task.budget
+    # 退还逻辑：优先退到真实余额（可提现），超出部分退到体验金
     current_user.frozen_balance -= task.budget
+    current_user.balance += task.budget
     task.status = TaskStatus.CANCELLED
     db.add(Transaction(task_id=task.id, to_user_id=current_user.id, amount=task.budget, tx_type="refund", description=f"任务取消退款: {task.title}"))
     db.commit()
@@ -318,21 +374,3 @@ async def send_message(
     db.commit()
     db.refresh(msg)
     return MessageResponse.model_validate(msg)
-
-
-@router.get("/transactions")
-async def get_my_transactions(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """获取我的交易记录"""
-    from app.schemas import TransactionResponse
-    txs = db.query(Transaction).filter(
-        (Transaction.from_user_id == current_user.id) | (Transaction.to_user_id == current_user.id)
-    ).order_by(Transaction.created_at.desc()).limit(50).all()
-    result = []
-    for tx in txs:
-        tx_dict = TransactionResponse.model_validate(tx).model_dump()
-        tx_dict["direction"] = "in" if tx.to_user_id == current_user.id else "out"
-        result.append(tx_dict)
-    return result

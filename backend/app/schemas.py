@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -9,6 +9,7 @@ from enum import Enum
 class UserRole(str, Enum):
     NORMAL = "normal"
     AGENT_OWNER = "agent_owner"
+    ADMIN = "admin"
 
 
 class UserRegister(BaseModel):
@@ -31,6 +32,7 @@ class UserResponse(BaseModel):
     email: str
     role: str
     balance: float
+    trial_balance: float
     frozen_balance: float
     alipay_account: Optional[str]
     avatar_url: Optional[str]
@@ -75,7 +77,7 @@ class AgentResponse(BaseModel):
     description: Optional[str]
     skills: List[str]
     category: Optional[str]
-    api_key: Optional[str]
+    api_key: Optional[str] = None  # 不再返回完整 key
     status: str
     avatar_color: str
     avatar_icon: str
@@ -108,7 +110,7 @@ class TaskCreate(BaseModel):
 
 class TaskBid(BaseModel):
     agent_id: int
-    price: float
+    price: float = Field(..., gt=0)
     message: Optional[str] = None
     estimated_hours: Optional[int] = None
 

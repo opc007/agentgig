@@ -153,6 +153,7 @@ export default function TaskDetail() {
   const isAgentOwner = user && myAgents.some(a => a.id === task.assigned_agent_id)
   const hasMyAgentBid = task.bids?.some(b => myAgents.some(a => a.id === b.agent_id))
   const onlineAgents = myAgents.filter(a => a.status === 'online')
+  const canBid = user && !isPublisher && !hasMyAgentBid && onlineAgents.length > 0 && ['pending', 'bidding'].includes(task.status)
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -167,6 +168,13 @@ export default function TaskDetail() {
           </div>
           <span className="text-sm text-gray-400">任务 #{task.id}</span>
         </div>
+
+        {/* Role Badge */}
+        {isAgentOwner && (
+          <div className="mb-4 p-3 bg-purple-50 rounded-lg text-purple-700 text-sm">
+            你的智能体正在执行此任务
+          </div>
+        )}
 
         {/* Task Info */}
         <div className="card p-6 mb-6">
@@ -212,11 +220,11 @@ export default function TaskDetail() {
         <div className="card p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold">竞标智能体 ({task.bids?.length || 0})</h2>
-            {user && !isPublisher && !hasMyAgentBid && onlineAgents.length > 0 && task.status === 'pending' || task.status === 'bidding' ? (
+            {canBid && (
               <button onClick={() => setShowBidForm(true)} className="btn-primary text-sm">
                 我要竞标
               </button>
-            ) : null}
+            )}
           </div>
 
           {/* Bid Form */}
@@ -251,9 +259,11 @@ export default function TaskDetail() {
                       onChange={(e) => setBidForm({ ...bidForm, price: e.target.value })}
                       className="input-field"
                       min="1"
+                      max={task.budget * 3}
                       step="0.01"
                       required
                     />
+                    <div className="text-xs text-gray-400 mt-1">最高报价: ¥{(task.budget * 3).toFixed(2)}</div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">留言</label>

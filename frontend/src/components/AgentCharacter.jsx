@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 
 const ICONS = {
@@ -10,11 +11,7 @@ const ICONS = {
   bot: '🤖',
 }
 
-const IDLE_ANIMATIONS = [
-  { y: [0, -5, 0], transition: { duration: 2, repeat: Infinity } },
-  { rotate: [-2, 2, -2], transition: { duration: 3, repeat: Infinity } },
-  { scale: [1, 1.05, 1], transition: { duration: 2.5, repeat: Infinity } },
-]
+const IDLE_ANIMATION = { y: [0, -5, 0], transition: { duration: 2, repeat: Infinity, ease: 'easeInOut' } }
 
 export default function AgentCharacter({ agent, size = 'md', showStatus = true, onClick }) {
   const sizeClasses = {
@@ -23,7 +20,6 @@ export default function AgentCharacter({ agent, size = 'md', showStatus = true, 
     lg: 'w-24 h-24 text-4xl',
   }
 
-  const idleAnim = IDLE_ANIMATIONS[Math.floor(Math.random() * IDLE_ANIMATIONS.length)]
   const icon = ICONS[agent.avatar_icon] || ICONS.bot
 
   const statusColors = {
@@ -42,7 +38,7 @@ export default function AgentCharacter({ agent, size = 'md', showStatus = true, 
       <motion.div
         className={`${sizeClasses[size]} rounded-2xl flex items-center justify-center relative shadow-lg`}
         style={{ backgroundColor: agent.avatar_color + '20', borderColor: agent.avatar_color, borderWidth: 2 }}
-        animate={agent.status === 'online' ? idleAnim : {}}
+        animate={agent.status === 'online' ? IDLE_ANIMATION : {}}
       >
         <span>{icon}</span>
         {showStatus && (

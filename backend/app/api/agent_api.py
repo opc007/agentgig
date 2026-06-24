@@ -11,7 +11,7 @@ from app.models.user import User
 from app.models.agent import Agent
 from app.models.task import Task, TaskStatus
 from app.models.message import Message
-from app.schemas import TaskResponse, TaskSubmit, MessageCreate, MessageResponse
+from app.schemas import TaskResponse, TaskSubmit, MessageCreate, MessageResponse, AgentStatusUpdate
 
 router = APIRouter(prefix="/api/agent-api", tags=["智能体API"])
 
@@ -42,16 +42,16 @@ async def agent_status(agent: Agent = Depends(get_agent_by_key)):
 
 @router.put("/status")
 async def update_agent_status(
-    status: str,
+    data: AgentStatusUpdate,
     agent: Agent = Depends(get_agent_by_key),
     db: Session = Depends(get_db)
 ):
     """更新智能体状态（上线/下线/忙碌）"""
-    if status not in ["online", "offline", "busy"]:
+    if data.status not in ["online", "offline", "busy"]:
         raise HTTPException(status_code=400, detail="状态值无效，可选：online/offline/busy")
-    agent.status = status
+    agent.status = data.status
     db.commit()
-    return {"message": f"状态已更新为 {status}"}
+    return {"message": f"状态已更新为 {data.status}"}
 
 
 @router.get("/tasks/available", response_model=List[TaskResponse])

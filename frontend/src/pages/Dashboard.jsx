@@ -87,6 +87,11 @@ export default function Dashboard() {
     }
   }
 
+  const copyApiKey = (key) => {
+    navigator.clipboard.writeText(key)
+    alert('API Key 已复制到剪贴板')
+  }
+
   const tabs = [
     { key: 'agents', label: '我的智能体', count: myAgents.length },
     { key: 'published', label: '我发布的任务', count: myPublishedTasks.length },
@@ -105,7 +110,10 @@ export default function Dashboard() {
           </div>
           <div className="text-right">
             <div className="text-sm text-gray-500">账户余额</div>
-            <div className="text-3xl font-bold text-primary-600">¥{user?.balance?.toFixed(2)}</div>
+            <div className="text-3xl font-bold text-primary-600">¥{(user?.balance || 0).toFixed(2)}</div>
+            {user?.trial_balance > 0 && (
+              <div className="text-sm text-blue-500">体验金: ¥{user.trial_balance.toFixed(2)}</div>
+            )}
             {user?.frozen_balance > 0 && (
               <div className="text-sm text-orange-500">冻结: ¥{user.frozen_balance.toFixed(2)}</div>
             )}
@@ -128,7 +136,7 @@ export default function Dashboard() {
               className="card p-6 mb-6 border-2 border-primary-200"
             >
               <h3 className="font-bold mb-3">模拟充值</h3>
-              <p className="text-sm text-gray-500 mb-3">输入充值金额（演示模式，直接到账）</p>
+              <p className="text-sm text-gray-500 mb-3">输入充值金额（演示模式，直接到账真实余额）</p>
               <div className="flex space-x-3">
                 <input
                   type="number"
@@ -213,9 +221,13 @@ export default function Dashboard() {
                           <div className="text-xs text-gray-500 mt-1">
                             完成 {agent.completed_tasks} 单 | 收入 ¥{agent.total_earnings.toFixed(0)}
                           </div>
-                          <div className="text-xs mt-1 p-1 bg-gray-200 rounded font-mono inline-block">
+                          <button
+                            onClick={() => copyApiKey(agent.api_key)}
+                            className="text-xs mt-1 p-1 bg-gray-200 rounded font-mono inline-block hover:bg-gray-300 cursor-pointer"
+                            title="点击复制完整 API Key"
+                          >
                             API Key: {agent.api_key?.slice(0, 16)}...
-                          </div>
+                          </button>
                         </div>
                         <div className="flex flex-col items-end space-y-2">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -225,17 +237,33 @@ export default function Dashboard() {
                           }`}>
                             {agent.status === 'online' ? '在线' : agent.status === 'busy' ? '忙碌' : '离线'}
                           </span>
-                          <button
-                            onClick={() => handleToggleStatus(agent)}
-                            disabled={agent.status === 'busy'}
-                            className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
-                              agent.status === 'online'
-                                ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                                : 'bg-green-50 text-green-600 hover:bg-green-100'
-                            } disabled:opacity-50 disabled:cursor-not-allowed`}
-                          >
-                            {agent.status === 'online' ? '下线' : '上线'}
-                          </button>
+                          {agent.status === 'busy' ? (
+                            <div className="flex space-x-1">
+                              <button
+                                onClick={() => updateAgentStatus(agent.id, 'online')}
+                                className="text-xs px-2 py-1.5 rounded-lg font-medium bg-green-50 text-green-600 hover:bg-green-100 transition-all"
+                              >
+                                恢复在线
+                              </button>
+                              <button
+                                onClick={() => updateAgentStatus(agent.id, 'offline')}
+                                className="text-xs px-2 py-1.5 rounded-lg font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-all"
+                              >
+                                下线
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleToggleStatus(agent)}
+                              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                                agent.status === 'online'
+                                  ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                                  : 'bg-green-50 text-green-600 hover:bg-green-100'
+                              }`}
+                            >
+                              {agent.status === 'online' ? '下线' : '上线'}
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}

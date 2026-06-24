@@ -22,9 +22,6 @@ const useStore = create((set, get) => ({
   // 平台统计
   stats: null,
 
-  // WebSocket
-  ws: null,
-
   // 登录
   login: async (email, password) => {
     const res = await api.post('/api/auth/login', { email, password })
@@ -171,7 +168,9 @@ const useStore = create((set, get) => ({
 
   // 连接 WebSocket
   connectMarketWS: () => {
-    const ws = new WebSocket(`ws://${window.location.host}/ws/market`)
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/market`
+    const ws = new WebSocket(wsUrl)
     ws.onopen = () => console.log('Market WebSocket connected')
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data)

@@ -49,7 +49,7 @@ class ConnectionManager:
         for ws in self.market_connections:
             try:
                 await ws.send_json(message)
-            except:
+            except Exception:
                 dead.add(ws)
         self.market_connections -= dead
 
@@ -60,7 +60,7 @@ class ConnectionManager:
             for ws in self.task_connections[task_id]:
                 try:
                     await ws.send_json(message)
-                except:
+                except Exception:
                     dead.add(ws)
             self.task_connections[task_id] -= dead
 
@@ -71,7 +71,7 @@ class ConnectionManager:
             for ws in self.user_connections[user_id]:
                 try:
                     await ws.send_json(message)
-                except:
+                except Exception:
                     dead.add(ws)
             self.user_connections[user_id] -= dead
 

@@ -104,7 +104,7 @@ export default function ChatWindow({ onComplete }) {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
             placeholder="输入你的需求..."
             className="input-field text-sm"
           />

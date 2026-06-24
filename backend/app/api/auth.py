@@ -13,7 +13,6 @@ router = APIRouter(prefix="/api/auth", tags=["认证"])
 @router.post("/register", response_model=TokenResponse)
 async def register(data: UserRegister, db: Session = Depends(get_db)):
     """用户注册"""
-    # 检查邮箱是否已存在
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="该邮箱已被注册")
     if db.query(User).filter(User.username == data.username).first():
@@ -26,7 +25,7 @@ async def register(data: UserRegister, db: Session = Depends(get_db)):
         role=data.role.value,
         alipay_account=data.alipay_account,
         wechat_pay=data.wechat_pay,
-        balance=1000.0,  # 新用户赠送1000体验金
+        trial_balance=1000.0,  # 新用户赠送1000体验金（不可提现）
     )
     db.add(user)
     db.commit()
@@ -69,7 +68,7 @@ async def deposit(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """模拟充值（体验金）"""
+    """模拟充值（真实余额，可提现）"""
     current_user.balance += data.amount
     tx = Transaction(
         from_user_id=current_user.id,
@@ -82,4 +81,4 @@ async def deposit(
     db.add(tx)
     db.commit()
     db.refresh(current_user)
-    return {"message": f"充值成功，到账 ¥{data.amount:.2f}", "balance": current_user.balance}
+    return {"message": f"充值成功，到账 ¥{data.amount:.2f}", "balance": current_user.balance, "trial_balance": current_user.trial_balance}
