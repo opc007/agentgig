@@ -13,7 +13,11 @@ const useStore = create((set, get) => ({
   // 任务
   tasks: [],
   pendingTasks: [],
-  myTasks: [],
+  myPublishedTasks: [],
+  myAcceptedTasks: [],
+
+  // 交易记录
+  transactions: [],
 
   // 平台统计
   stats: null,
@@ -58,6 +62,13 @@ const useStore = create((set, get) => ({
     }
   },
 
+  // 充值
+  deposit: async (amount) => {
+    const res = await api.post('/api/auth/deposit', { amount })
+    await get().fetchUser()
+    return res.data
+  },
+
   // 获取在线智能体
   fetchOnlineAgents: async () => {
     const res = await api.get('/api/agents/online')
@@ -83,6 +94,15 @@ const useStore = create((set, get) => ({
     return res.data
   },
 
+  // 更新智能体状态
+  updateAgentStatus: async (agentId, status) => {
+    const res = await api.put(`/api/agents/${agentId}/status`, { status })
+    set(state => ({
+      myAgents: state.myAgents.map(a => a.id === agentId ? res.data : a)
+    }))
+    return res.data
+  },
+
   // 获取待接单任务
   fetchPendingTasks: async () => {
     const res = await api.get('/api/tasks/pending')
@@ -95,10 +115,46 @@ const useStore = create((set, get) => ({
     set({ tasks: res.data })
   },
 
+  // 获取我发布的任务
+  fetchMyPublishedTasks: async () => {
+    const res = await api.get('/api/tasks/my/published')
+    set({ myPublishedTasks: res.data })
+  },
+
+  // 获取我的智能体参与的任务
+  fetchMyAcceptedTasks: async () => {
+    const res = await api.get('/api/tasks/my/accepted')
+    set({ myAcceptedTasks: res.data })
+  },
+
   // 创建任务
   createTask: async (data) => {
     const res = await api.post('/api/tasks', data)
     return res.data
+  },
+
+  // 竞标任务
+  bidTask: async (taskId, data) => {
+    const res = await api.post(`/api/tasks/${taskId}/bid`, data)
+    return res.data
+  },
+
+  // 选择接单
+  acceptBid: async (taskId, agentId) => {
+    const res = await api.post(`/api/tasks/${taskId}/accept/${agentId}`)
+    return res.data
+  },
+
+  // 提交交付物
+  submitDeliverable: async (taskId, data) => {
+    const res = await api.post(`/api/tasks/${taskId}/submit`, data)
+    return res.data
+  },
+
+  // 获取交易记录
+  fetchTransactions: async () => {
+    const res = await api.get('/api/tasks/transactions')
+    set({ transactions: res.data })
   },
 
   // 获取平台统计
@@ -119,7 +175,6 @@ const useStore = create((set, get) => ({
     ws.onopen = () => console.log('Market WebSocket connected')
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data)
-      // 处理实时消息
       if (msg.type === 'new_task') {
         get().fetchPendingTasks()
       }

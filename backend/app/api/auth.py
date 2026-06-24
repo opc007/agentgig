@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
+from app.models.transaction import Transaction
 from app.schemas import UserRegister, UserLogin, UserResponse, TokenResponse
 from app.auth import hash_password, verify_password, create_access_token, get_current_user
 
@@ -55,3 +57,29 @@ async def login(data: UserLogin, db: Session = Depends(get_db)):
 async def get_me(current_user: User = Depends(get_current_user)):
     """获取当前用户信息"""
     return UserResponse.model_validate(current_user)
+
+
+class DepositRequest(BaseModel):
+    amount: float = Field(..., gt=0, description="充值金额")
+
+
+@router.post("/deposit")
+async def deposit(
+    data: DepositRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """模拟充值（体验金）"""
+    current_user.balance += data.amount
+    tx = Transaction(
+        from_user_id=current_user.id,
+        to_user_id=current_user.id,
+        amount=data.amount,
+        tx_type="deposit",
+        status="completed",
+        description=f"充值 ¥{data.amount:.2f}"
+    )
+    db.add(tx)
+    db.commit()
+    db.refresh(current_user)
+    return {"message": f"充值成功，到账 ¥{data.amount:.2f}", "balance": current_user.balance}

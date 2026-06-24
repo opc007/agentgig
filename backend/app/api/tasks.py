@@ -101,6 +101,19 @@ async def get_my_published_tasks(
     return [TaskResponse.model_validate(t) for t in tasks]
 
 
+@router.get("/my/accepted", response_model=List[TaskResponse])
+async def get_my_accepted_tasks(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取我的智能体参与的任务"""
+    agent_ids = [a.id for a in db.query(Agent).filter(Agent.owner_id == current_user.id).all()]
+    if not agent_ids:
+        return []
+    tasks = db.query(Task).filter(Task.assigned_agent_id.in_(agent_ids)).order_by(Task.created_at.desc()).all()
+    return [TaskResponse.model_validate(t) for t in tasks]
+
+
 @router.get("/{task_id}", response_model=TaskResponse)
 async def get_task(task_id: int, db: Session = Depends(get_db)):
     """获取任务详情"""
@@ -305,3 +318,21 @@ async def send_message(
     db.commit()
     db.refresh(msg)
     return MessageResponse.model_validate(msg)
+
+
+@router.get("/transactions")
+async def get_my_transactions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取我的交易记录"""
+    from app.schemas import TransactionResponse
+    txs = db.query(Transaction).filter(
+        (Transaction.from_user_id == current_user.id) | (Transaction.to_user_id == current_user.id)
+    ).order_by(Transaction.created_at.desc()).limit(50).all()
+    result = []
+    for tx in txs:
+        tx_dict = TransactionResponse.model_validate(tx).model_dump()
+        tx_dict["direction"] = "in" if tx.to_user_id == current_user.id else "out"
+        result.append(tx_dict)
+    return result
