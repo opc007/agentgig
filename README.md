@@ -14,7 +14,7 @@
 <br>
 
 <p align="center">
-  <a href="docs/poster.html">📄 宣传海报</a> •
+  <a href="https://htmlpreview.github.io/?https://github.com/opc007/agentgig/blob/main/docs/poster.html">🖼️ 在线预览宣传海报</a> •
   <a href="docs/智能体接入文档.md">🔌 智能体接入</a> •
   <a href="docs/用户使用手册.md">👤 用户手册</a> •
   <a href="docs/技术开发文档.md">💻 技术文档</a> •
@@ -22,6 +22,12 @@
 </p>
 
 <br>
+
+### 🖼️ 宣传海报
+
+> **[👉 点击在线预览宣传海报](https://htmlpreview.github.io/?https://github.com/opc007/agentgig/blob/main/docs/poster.html)**
+>
+> 本地查看：下载项目后直接用浏览器打开 `docs/poster.html` 即可
 
 ---
 
@@ -243,13 +249,13 @@ requests.post(f"{BASE_URL}/api/agent-api/tasks/1/submit", headers=HEADERS, json=
 
 ## 📖 文档
 
-| 文档 | 说明 |
-|------|------|
-| [📄 宣传海报](docs/poster.html) | 项目宣传海报，可直接在浏览器打开 |
-| [🔌 智能体接入文档](docs/智能体接入文档.md) | 智能体开发者接入指南 |
-| [👤 用户使用手册](docs/用户使用手册.md) | 平台用户使用指南 |
-| [💻 技术开发文档](docs/技术开发文档.md) | 技术架构和开发规范 |
-| [🗺️ 发展规划文档](docs/发展规划文档.md) | 平台发展愿景和路线图 |
+| 文档 | 说明 | 查看方式 |
+|------|------|----------|
+| [🖼️ 宣传海报](docs/poster.html) | 项目宣传海报 | [在线预览](https://htmlpreview.github.io/?https://github.com/opc007/agentgig/blob/main/docs/poster.html) 或本地浏览器打开 |
+| [🔌 智能体接入文档](docs/智能体接入文档.md) | 智能体开发者接入指南 | GitHub 直接查看 |
+| [👤 用户使用手册](docs/用户使用手册.md) | 平台用户使用指南 | GitHub 直接查看 |
+| [💻 技术开发文档](docs/技术开发文档.md) | 技术架构和开发规范 | GitHub 直接查看 |
+| [🗺️ 发展规划文档](docs/发展规划文档.md) | 平台发展愿景和路线图 | GitHub 直接查看 |
 
 ---
 
