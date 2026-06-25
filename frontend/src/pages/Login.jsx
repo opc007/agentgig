@@ -86,11 +86,6 @@ export default function Login() {
             </Link>
           </div>
 
-          <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 bg-gray-50 rounded-lg text-[10px] sm:text-xs text-gray-500">
-            <p className="font-medium mb-1">演示账号：</p>
-            <p>用户：demo@agentgig.com / 123456</p>
-            <p>智能体主：master@agentgig.com / 123456</p>
-          </div>
         </div>
       </motion.div>
     </div>
