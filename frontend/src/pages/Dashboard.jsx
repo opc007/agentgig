@@ -83,7 +83,6 @@ export default function Dashboard() {
     }
   }
 
-  // API Key 安全展示：完整 key 不在列表页显示，提供复制入口
   const displayApiKey = (key) => {
     if (!key) return t('dashboard.apiKeyHidden') || 'API Key 已隐藏'
     return key.slice(0, 8) + '...' + key.slice(-4)
@@ -95,11 +94,62 @@ export default function Dashboard() {
     alert(t('dashboard.apiKeyCopied') || 'API Key 已复制')
   }
 
+  // 统计数据
+  const allTasks = [...myPublishedTasks, ...myAcceptedTasks]
+  const totalTasks = allTasks.length
+  const completedTasks = allTasks.filter(t => t.status === 'completed').length
+  const inProgressTasks = allTasks.filter(t => ['assigned', 'in_progress', 'submitted', 'revision'].includes(t.status)).length
+  const totalEarnings = myAgents.reduce((sum, a) => sum + (a.total_earnings || 0), 0)
+
   const tabs = [
     { key: 'agents', label: t('dashboard.tabAgents'), count: myAgents.length },
     { key: 'published', label: t('dashboard.tabPublished'), count: myPublishedTasks.length },
     { key: 'accepted', label: t('dashboard.tabAccepted'), count: myAcceptedTasks.length },
     { key: 'transactions', label: t('dashboard.tabTransactions'), count: transactions.length },
+  ]
+
+  // 统计卡片配置
+  const statsCards = [
+    {
+      key: 'total',
+      icon: '📋',
+      label: '任务总数',
+      value: totalTasks,
+      color: 'from-blue-500 to-blue-600',
+      bgLight: 'bg-blue-50',
+      textLight: 'text-blue-600',
+      onClick: () => setActiveTab('published'),
+    },
+    {
+      key: 'completed',
+      icon: '✅',
+      label: '已完成',
+      value: completedTasks,
+      color: 'from-green-500 to-green-600',
+      bgLight: 'bg-green-50',
+      textLight: 'text-green-600',
+      onClick: () => setActiveTab('published'),
+    },
+    {
+      key: 'in_progress',
+      icon: '⏳',
+      label: '进行中',
+      value: inProgressTasks,
+      color: 'from-orange-500 to-orange-600',
+      bgLight: 'bg-orange-50',
+      textLight: 'text-orange-600',
+      onClick: () => setActiveTab('accepted'),
+    },
+    {
+      key: 'earnings',
+      icon: '💰',
+      label: '总收入',
+      value: `¥${totalEarnings.toFixed(0)}`,
+      color: 'from-purple-500 to-purple-600',
+      bgLight: 'bg-purple-50',
+      textLight: 'text-purple-600',
+      onClick: () => setActiveTab('transactions'),
+    },
   ]
 
   return (
@@ -127,6 +177,29 @@ export default function Dashboard() {
               {t('dashboard.deposit')} / 提现
             </Link>
           </div>
+        </div>
+
+        {/* Stats Cards - 可点击跳转 */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          {statsCards.map((card, i) => (
+            <motion.button
+              key={card.key}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.08 }}
+              onClick={card.onClick}
+              className={`${card.bgLight} dark:bg-gray-800 rounded-xl p-4 text-left hover:shadow-md transition-all cursor-pointer group border border-transparent hover:border-gray-200 dark:hover:border-gray-700`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-2xl">{card.icon}</span>
+                <span className={`${card.textLight} dark:text-gray-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity`}>
+                  查看 →
+                </span>
+              </div>
+              <div className={`text-2xl font-bold ${card.textLight} dark:text-gray-100`}>{card.value}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{card.label}</div>
+            </motion.button>
+          ))}
         </div>
 
         {/* Deposit Modal */}
@@ -224,7 +297,6 @@ export default function Dashboard() {
                           <div className="text-xs text-gray-500 mt-1">
                             {t('dashboard.completedTasks')} {agent.completed_tasks} {t('dashboard.singleUnit')} | {t('dashboard.earnings')} ¥{agent.total_earnings.toFixed(0)}
                           </div>
-                          {/* API Key 安全展示：完整 key 不在此处显示 */}
                           <div className="text-xs mt-1 flex items-center gap-1">
                             <span className="text-gray-400">API Key:</span>
                             <span

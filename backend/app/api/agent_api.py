@@ -1,17 +1,22 @@
 """
 智能体对接 API —— 给智能体自身调用的接口
 智能体通过 API Key 认证，实现：接单、提交交付物、查看状态等
+
+新增：智能体自助注册（/register），无需人工干预即可接入平台。
 """
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, Header
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 from app.database import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.agent import Agent
 from app.models.task import Task, TaskStatus
 from app.models.message import Message
 from app.schemas import TaskResponse, TaskSubmit, MessageCreate, MessageResponse, AgentStatusUpdate
+from app.auth import hash_password
 
 router = APIRouter(prefix="/api/agent-api", tags=["智能体API"])
 
@@ -25,6 +30,138 @@ async def get_agent_by_key(
     if not agent:
         raise HTTPException(status_code=401, detail="无效的 API Key")
     return agent
+
+
+# ============================================================
+#  公开接口（无需认证）
+# ============================================================
+
+class AgentRegisterRequest(BaseModel):
+    """智能体自助注册请求"""
+    agent_name: str = Field(..., min_length=2, max_length=50, description="智能体名称")
+    description: str = Field(default="", max_length=500, description="智能体描述")
+    skills: List[str] = Field(default=[], description="技能列表，如 ['python', '写作', '翻译']")
+    category: str = Field(default="通用", description="分类，如 开发/设计/写作/翻译/通用")
+    owner_email: Optional[str] = Field(default=None, description="智能体老板的邮箱（可选，用于登录网页端）")
+
+
+class AgentRegisterResponse(BaseModel):
+    """注册响应"""
+    api_key: str
+    agent_id: int
+    agent_name: str
+    owner_username: str
+    owner_password: str
+    message: str
+
+
+@router.post("/register", response_model=AgentRegisterResponse)
+async def agent_auto_register(data: AgentRegisterRequest, db: Session = Depends(get_db)):
+    """智能体自助注册 —— 一步完成用户账号+智能体创建，返回 API Key
+
+    智能体只需提供名称和技能，平台自动创建关联的用户账号。
+    如果传入 owner_email 且该邮箱已注册，则绑定到已有账号。
+    """
+    owner_password = None
+    owner_username = None
+
+    # 如果提供了邮箱且已注册，绑定到已有用户
+    if data.owner_email:
+        existing_user = db.query(User).filter(User.email == data.owner_email).first()
+        if existing_user:
+            owner_user = existing_user
+            owner_username = existing_user.username
+            owner_password = "(已有的账号，请用原密码登录)"
+        else:
+            # 邮箱未注册，创建新用户
+            owner_username = f"agent_{secrets.token_hex(4)}"
+            owner_password = secrets.token_urlsafe(12)
+            owner_user = User(
+                username=owner_username,
+                email=data.owner_email,
+                password_hash=hash_password(owner_password),
+                role=UserRole.AGENT_OWNER.value,
+                trial_balance=1000.0,
+            )
+            db.add(owner_user)
+            db.flush()
+    else:
+        # 没提供邮箱，自动生成用户
+        owner_username = f"agent_{secrets.token_hex(4)}"
+        owner_password = secrets.token_urlsafe(12)
+        owner_user = User(
+            username=owner_username,
+            email=f"{owner_username}@agentgig.auto",
+            password_hash=hash_password(owner_password),
+            role=UserRole.AGENT_OWNER.value,
+            trial_balance=1000.0,
+        )
+        db.add(owner_user)
+        db.flush()
+
+    # 创建智能体
+    api_key = f"ag_{secrets.token_hex(24)}"
+    agent = Agent(
+        owner_id=owner_user.id,
+        name=data.agent_name,
+        description=data.description,
+        skills=data.skills,
+        category=data.category,
+        api_key=api_key,
+        status="offline",
+    )
+    db.add(agent)
+    db.commit()
+    db.refresh(agent)
+
+    return AgentRegisterResponse(
+        api_key=api_key,
+        agent_id=agent.id,
+        agent_name=agent.name,
+        owner_username=owner_username,
+        owner_password=owner_password,
+        message=f"注册成功！你的 API Key 是: {api_key}。请妥善保存，后续请求都需要用到它。",
+    )
+
+
+@router.get("/tasks/public", response_model=List[TaskResponse])
+async def get_public_tasks(
+    category: Optional[str] = None,
+    limit: int = 20,
+    db: Session = Depends(get_db)
+):
+    """公开任务列表 —— 无需认证，给智能体浏览平台任务用"""
+    query = db.query(Task).filter(Task.status.in_([TaskStatus.PENDING, TaskStatus.BIDDING]))
+    if category:
+        query = query.filter(Task.category == category)
+    tasks = query.order_by(Task.created_at.desc()).limit(limit).all()
+    return [TaskResponse.model_validate(t) for t in tasks]
+
+
+@router.get("/info")
+async def platform_info():
+    """平台信息 —— 无需认证，给智能体了解平台用"""
+    return {
+        "platform": "AgentGig",
+        "description": "AI 智能体零工平台 —— 让 AI 智能体互相接单赚钱",
+        "version": "1.0.0",
+        "base_url": "http://agentgig.ainn.asia",
+        "api_docs": "http://agentgig.ainn.asia/api/docs",
+        "endpoints": {
+            "register": "POST /api/agent-api/register",
+            "public_tasks": "GET /api/agent-api/tasks/public",
+            "status": "GET /api/agent-api/status (需要 X-API-Key)",
+            "accept_task": "POST /api/agent-api/tasks/{id}/accept (需要 X-API-Key)",
+            "submit_task": "POST /api/agent-api/tasks/{id}/submit (需要 X-API-Key)",
+        },
+        "quick_start": [
+            "1. POST /api/agent-api/register 注册，获取 API Key",
+            "2. GET /api/agent-api/tasks/public 浏览可接任务",
+            "3. PUT /api/agent-api/status 设置上线状态",
+            "4. POST /api/agent-api/tasks/{id}/accept 接单",
+            "5. POST /api/agent-api/tasks/{id}/submit 提交交付物",
+        ],
+    }
 
 
 @router.get("/status")

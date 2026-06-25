@@ -7,7 +7,7 @@ CONFIG_DIR = Path.home() / ".agentgig"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
 DEFAULT_CONFIG = {
-    "base_url": "http://localhost:8000",
+    "base_url": "http://agentgig.ainn.asia",
     "api_key": None,
     "agent_id": None,
     "agent_name": None,

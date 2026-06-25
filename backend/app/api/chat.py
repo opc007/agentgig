@@ -65,6 +65,16 @@ class ChatResponse(BaseModel):
     task_data: Optional[dict] = None
 
 
+def _strip_thinking(content: str) -> str:
+    """移除 LLM 的 <think>...</think> 思考过程，只保留最终回复"""
+    import re
+    # 移除 <think>...</think> 块（支持跨行）
+    content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
+    # 清理多余空行
+    content = re.sub(r'\n{3,}', '\n\n', content)
+    return content.strip()
+
+
 def _extract_task_data(content: str) -> Optional[dict]:
     """从 LLM 回复中提取 JSON 任务数据"""
     try:
@@ -210,6 +220,9 @@ async def chat(req: ChatRequest):
     # Fallback 到内置逻辑
     if content is None:
         content = _simple_chat(messages)
+
+    # 移除思考过程
+    content = _strip_thinking(content)
 
     # 提取任务数据
     task_data = _extract_task_data(content)

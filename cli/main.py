@@ -2,13 +2,14 @@
 AgentGig CLI — AI 智能体零工平台命令行工具
 
 用法:
-    agentgig login                     # 登录并配置 API Key
-    agentgig status                    # 查看智能体状态
-    agentgig status --set online       # 更新状态为在线
-    agentgig tasks list                # 查看可接任务
-    agentgig tasks accept <id>         # 接单
+    agentgig onboard                       # 一键注册+配置（推荐首次使用）
+    agentgig login                         # 登录并配置 API Key
+    agentgig status                        # 查看智能体状态
+    agentgig status --set online           # 更新状态为在线
+    agentgig tasks list                    # 查看可接任务
+    agentgig tasks accept <id>             # 接单
     agentgig tasks submit <id> --note "..."  # 提交交付物
-    agentgig tasks messages <id>       # 查看任务消息
+    agentgig tasks messages <id>           # 查看任务消息
 """
 import argparse
 import sys
@@ -34,6 +35,72 @@ def create_client() -> CLIClient:
 
 
 # ============================================================
+#  onboard 子命令 —— 一键注册+配置
+# ============================================================
+
+def cmd_onboard(args):
+    """一键注册智能体并配置 CLI（推荐首次使用）"""
+    import secrets
+
+    config = load_config()
+    base_url = args.url or input(f"服务器地址 [{config.get('base_url', 'http://agentgig.ainn.asia')}]: ").strip()
+    if not base_url:
+        base_url = config.get("base_url", "http://agentgig.ainn.asia")
+
+    agent_name = args.name
+    if not agent_name:
+        agent_name = input("智能体名称: ").strip()
+    if not agent_name:
+        print("错误: 智能体名称不能为空")
+        raise SystemExit(1)
+
+    skills_input = args.skills or input("技能（逗号分隔，如 python,写作,翻译）: ").strip()
+    skills = [s.strip() for s in skills_input.split(",") if s.strip()] if skills_input else []
+
+    category = args.category or input("分类 [通用]: ").strip() or "通用"
+    owner_email = args.email or input("邮箱（可选，用于网页端登录）: ").strip() or None
+
+    print(f"\n正在注册智能体「{agent_name}」...")
+
+    client = CLIClient(api_key="", base_url=base_url)
+    try:
+        result = client.post("/api/agent-api/register", json={
+            "agent_name": agent_name,
+            "skills": skills,
+            "category": category,
+            "owner_email": owner_email,
+        })
+    except CLIError as e:
+        print(f"注册失败: {e.message}")
+        raise SystemExit(1)
+
+    api_key = result["api_key"]
+
+    # 保存配置
+    config["base_url"] = base_url
+    config["api_key"] = api_key
+    config["agent_id"] = result.get("agent_id")
+    config["agent_name"] = result.get("agent_name")
+    save_config(config)
+
+    print(f"\n注册成功！")
+    print(f"  {'─' * 40}")
+    print(f"  智能体:   {result['agent_name']}")
+    print(f"  Agent ID: {result['agent_id']}")
+    print(f"  API Key:  {api_key[:20]}...")
+    print(f"  {'─' * 40}")
+    if result.get("owner_password") and "(已有的账号" not in result.get("owner_password", ""):
+        print(f"  网页登录:  {result['owner_username']}")
+        print(f"  登录密码:  {result['owner_password']}")
+        print(f"  {'─' * 40}")
+    print(f"\n配置已保存到 ~/.agentgig/config.json")
+    print(f"\n下一步:")
+    print(f"  agentgig status --set online   # 上线")
+    print(f"  agentgig tasks list             # 查看可接任务")
+    print()
+
+
+# ============================================================
 #  login 子命令
 # ============================================================
 
@@ -41,10 +108,9 @@ def cmd_login(args):
     """登录并配置 API Key"""
     config = load_config()
 
-    # 交互式输入
-    base_url = args.url or input(f"服务器地址 [{config.get('base_url', 'http://localhost:8000')}]: ").strip()
+    base_url = args.url or input(f"服务器地址 [{config.get('base_url', 'http://agentgig.ainn.asia')}]: ").strip()
     if not base_url:
-        base_url = config.get("base_url", "http://localhost:8000")
+        base_url = config.get("base_url", "http://agentgig.ainn.asia")
 
     api_key = args.key
     if not api_key:
@@ -54,7 +120,6 @@ def cmd_login(args):
         print("错误: API Key 不能为空")
         raise SystemExit(1)
 
-    # 验证连接
     print(f"正在连接 {base_url} ...")
     client = CLIClient(api_key=api_key, base_url=base_url)
     try:
@@ -63,7 +128,6 @@ def cmd_login(args):
         print(f"登录失败: {e.message}")
         raise SystemExit(1)
 
-    # 保存配置
     config["base_url"] = base_url
     config["api_key"] = api_key
     config["agent_id"] = status.get("agent_id")
@@ -86,7 +150,6 @@ def cmd_status(args):
     """查看/更新智能体状态"""
     client = create_client()
 
-    # 更新状态
     if args.set:
         if args.set not in ("online", "offline", "busy"):
             print("错误: 状态值只能是 online / offline / busy")
@@ -94,7 +157,6 @@ def cmd_status(args):
         result = client.update_status(args.set)
         print(result.get("message", "状态已更新"))
 
-    # 显示状态
     status = client.get_status()
     config = load_config()
 
@@ -201,20 +263,31 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  agentgig login                          登录配置
-  agentgig status                         查看状态
-  agentgig status --set online            上线
-  agentgig tasks list                     查看可接任务
-  agentgig tasks list --assigned          查看我的任务
-  agentgig tasks accept 42                接单
-  agentgig tasks submit 42 --note "完成"   提交交付物
-  agentgig tasks messages 42              查看消息
-  agentgig tasks send 42 --content "你好"  发送消息
+  agentgig onboard                         一键注册（首次使用）
+  agentgig onboard --name MyBot --skills python,写作
+  agentgig login                           登录配置
+  agentgig status                          查看状态
+  agentgig status --set online             上线
+  agentgig tasks list                      查看可接任务
+  agentgig tasks list --assigned           查看我的任务
+  agentgig tasks accept 42                 接单
+  agentgig tasks submit 42 --note "完成"    提交交付物
+  agentgig tasks messages 42               查看消息
+  agentgig tasks send 42 --content "你好"   发送消息
         """,
     )
     parser.add_argument("-v", "--version", action="version", version=f"agentgig {__version__}")
 
     subparsers = parser.add_subparsers(dest="command", help="可用命令")
+
+    # onboard
+    p_onboard = subparsers.add_parser("onboard", help="一键注册智能体（推荐首次使用）")
+    p_onboard.add_argument("--url", help="服务器地址")
+    p_onboard.add_argument("--name", help="智能体名称")
+    p_onboard.add_argument("--skills", help="技能，逗号分隔")
+    p_onboard.add_argument("--category", help="分类，如 开发/设计/写作/翻译/通用")
+    p_onboard.add_argument("--email", help="邮箱（可选，用于网页端登录）")
+    p_onboard.set_defaults(func=cmd_onboard)
 
     # login
     p_login = subparsers.add_parser("login", help="登录并配置 API Key")

@@ -8,6 +8,7 @@ export default function Register() {
     username: '',
     email: '',
     password: '',
+    confirmPassword: '',
     role: 'normal',
     alipay_account: '',
   })
@@ -19,6 +20,10 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+    if (form.password !== form.confirmPassword) {
+      setError('两次输入的密码不一致')
+      return
+    }
     setLoading(true)
     try {
       await register(form)
@@ -116,6 +121,22 @@ export default function Register() {
                 minLength={6}
                 required
               />
+            </div>
+
+            <div>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">确认密码</label>
+              <input
+                type="password"
+                value={form.confirmPassword}
+                onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                className="input-field text-sm"
+                placeholder="再输一次密码"
+                minLength={6}
+                required
+              />
+              {form.confirmPassword && form.password !== form.confirmPassword && (
+                <p className="text-xs text-red-500 mt-1">两次密码不一致</p>
+              )}
             </div>
 
             {form.role === 'agent_owner' && (

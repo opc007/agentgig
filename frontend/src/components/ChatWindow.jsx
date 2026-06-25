@@ -20,7 +20,6 @@ export default function ChatWindow({ onComplete }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // 检查 LLM 配置状态
   useEffect(() => {
     api.get('/api/chat/config').then(r => {
       setLlmStatus(r.data)
@@ -37,7 +36,6 @@ export default function ChatWindow({ onComplete }) {
     setLoading(true)
 
     try {
-      // 构建消息历史（去掉系统欢迎语）
       const chatHistory = [...messages.slice(1), userMsg].map(m => ({
         role: m.role,
         content: m.content,
@@ -76,7 +74,7 @@ export default function ChatWindow({ onComplete }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden flex flex-col h-[400px] sm:h-[500px]">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col h-[400px] sm:h-[500px]">
       {/* Header */}
       <div className="bg-gradient-to-r from-primary-500 to-purple-600 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between">
         <h3 className="text-white font-medium flex items-center space-x-2 text-sm sm:text-base">
@@ -94,7 +92,7 @@ export default function ChatWindow({ onComplete }) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gray-50 dark:bg-gray-900">
         <AnimatePresence>
           {messages.map((msg, i) => (
             <motion.div
@@ -106,7 +104,7 @@ export default function ChatWindow({ onComplete }) {
               <div className={`max-w-[85%] sm:max-w-[80%] px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl ${
                 msg.role === 'user'
                   ? 'bg-primary-500 text-white rounded-br-md'
-                  : 'bg-gray-100 text-gray-800 rounded-bl-md'
+                  : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-bl-md border border-gray-200 dark:border-gray-600'
               }`}>
                 <p className="text-xs sm:text-sm whitespace-pre-line leading-relaxed">{msg.content}</p>
               </div>
@@ -121,11 +119,11 @@ export default function ChatWindow({ onComplete }) {
             animate={{ opacity: 1 }}
             className="flex justify-start"
           >
-            <div className="bg-gray-100 px-4 py-2.5 rounded-2xl rounded-bl-md">
+            <div className="bg-white dark:bg-gray-700 px-4 py-2.5 rounded-2xl rounded-bl-md border border-gray-200 dark:border-gray-600">
               <div className="flex space-x-1.5">
-                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                <span className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </motion.div>
@@ -136,13 +134,13 @@ export default function ChatWindow({ onComplete }) {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="mx-2 p-3 bg-green-50 border border-green-200 rounded-xl"
+            className="mx-2 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-xl"
           >
-            <p className="text-xs text-green-600 font-medium mb-2">📋 需求已整理完成</p>
-            <p className="text-sm font-semibold text-gray-800">{taskData.title}</p>
-            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{taskData.description}</p>
+            <p className="text-xs text-green-600 dark:text-green-400 font-medium mb-2">📋 需求已整理完成</p>
+            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{taskData.title}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{taskData.description}</p>
             <div className="flex items-center justify-between mt-3">
-              <span className="text-sm font-bold text-primary-600">¥{taskData.budget}</span>
+              <span className="text-sm font-bold text-primary-600 dark:text-primary-400">¥{taskData.budget}</span>
               <button
                 onClick={handlePublish}
                 className="btn-primary text-xs px-4 py-1.5"
@@ -157,7 +155,7 @@ export default function ChatWindow({ onComplete }) {
       </div>
 
       {/* Input */}
-      <div className="border-t p-2.5 sm:p-3">
+      <div className="border-t border-gray-200 dark:border-gray-700 p-2.5 sm:p-3 bg-white dark:bg-gray-800">
         <div className="flex gap-2">
           <input
             ref={inputRef}
@@ -178,7 +176,7 @@ export default function ChatWindow({ onComplete }) {
           </button>
         </div>
         {!llmStatus?.llm_configured && (
-          <p className="text-[10px] text-gray-400 mt-1">当前使用内置规则引擎，配置 LLM API Key 可获得更智能的对话体验</p>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">当前使用内置规则引擎，配置 LLM API Key 可获得更智能的对话体验</p>
         )}
       </div>
     </div>

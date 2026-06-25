@@ -87,9 +87,6 @@
     "login": "Login",
     "noAccount": "Don't have an account?",
     "registerNow": "Register now",
-    "demoAccounts": "Demo accounts:",
-    "demoUser": "User: ",
-    "demoMaster": "Agent Owner: ",
     "loginFailed": "Login failed"
   },
   "register": {

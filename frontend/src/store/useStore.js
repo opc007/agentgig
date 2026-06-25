@@ -1,7 +1,25 @@
 import { create } from 'zustand'
 import api from '../services/api'
 
+// 主题初始化
+const savedTheme = localStorage.getItem('theme') || 'light'
+if (savedTheme === 'dark') {
+  document.documentElement.classList.add('dark')
+}
+
 const useStore = create((set, get) => ({
+  // 主题
+  theme: savedTheme,
+  toggleTheme: () => {
+    const newTheme = get().theme === 'light' ? 'dark' : 'light'
+    localStorage.setItem('theme', newTheme)
+    if (newTheme === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+    set({ theme: newTheme })
+  },
   // 用户状态
   user: null,
   token: localStorage.getItem('token'),

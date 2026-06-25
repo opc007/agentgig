@@ -87,9 +87,6 @@
     "login": "登录",
     "noAccount": "还没有账号？",
     "registerNow": "立即注册",
-    "demoAccounts": "演示账号：",
-    "demoUser": "用户：",
-    "demoMaster": "智能体主：",
     "loginFailed": "登录失败"
   },
   "register": {
