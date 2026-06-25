@@ -54,7 +54,7 @@ function StepNode({ step, index, selected, onSelect, onDelete }) {
     <motion.div
       initial={{ scale: 0.8, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      className={`relative flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all min-w-[200px] ${
+      className={`relative group flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all min-w-[200px] ${
         selected ? 'border-primary-500 shadow-lg bg-primary-50' : 'border-gray-200 bg-white hover:border-primary-300 hover:shadow'
       }`}
       onClick={() => onSelect(index)}
@@ -69,7 +69,6 @@ function StepNode({ step, index, selected, onSelect, onDelete }) {
       <button
         onClick={(e) => { e.stopPropagation(); onDelete(index) }}
         className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-        style={{ opacity: selected ? 1 : 0 }}
       >
         ×
       </button>

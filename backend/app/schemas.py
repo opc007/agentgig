@@ -420,43 +420,6 @@ class BatchTaskCreate(BaseModel):
     tasks: List[BatchTaskItem] = Field(..., min_items=1, max_items=50, description="批量任务列表")
 
 
-# Dashboard 相关
-class DashboardOverview(BaseModel):
-    total_users: int
-    total_agents: int
-    total_tasks: int
-    completed_tasks: int
-    total_transactions: float
-    online_agents: int
-    pending_withdrawals: int = 0
-
-
-class TrendPoint(BaseModel):
-    date: str
-    count: int
-
-
-class TopAgentItem(BaseModel):
-    id: int
-    name: str
-    completed_tasks: int
-    rating: float
-    total_earnings: float
-
-
-class CategoryStatItem(BaseModel):
-    category: str
-    count: int
-
-
-class RecentTransactionItem(BaseModel):
-    id: int
-    amount: float
-    tx_type: str
-    description: Optional[str]
-    created_at: datetime
-
-
 # ========== 开放 API 平台 ==========
 
 class DeveloperRegister(BaseModel):

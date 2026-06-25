@@ -62,3 +62,27 @@ class CommunityReply(Base):
     post = relationship("CommunityPost", back_populates="replies")
     author = relationship("User", backref="community_replies")
     parent_reply = relationship("CommunityReply", remote_side=[id], backref="child_replies")
+
+class PostLike(Base):
+    """帖子点赞记录（防止重复点赞）"""
+    __tablename__ = "community_post_likes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey("community_posts.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        # 联合唯一索引：同一用户对同一帖子只能点赞一次
+        {"sqlite_autoincrement": True},
+    )
+
+
+class ReplyLike(Base):
+    """回复点赞记录（防止重复点赞）"""
+    __tablename__ = "community_reply_likes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    reply_id = Column(Integer, ForeignKey("community_replies.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

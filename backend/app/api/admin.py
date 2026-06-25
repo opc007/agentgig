@@ -310,12 +310,24 @@ async def resolve_dispute(
     agent = db.query(Agent).filter(Agent.id == task.assigned_agent_id).first()
     agent_owner = db.query(User).filter(User.id == agent.owner_id).first() if agent else None
 
+    # 冻结金额校验
+    if publisher and publisher.frozen_balance < task.budget:
+        raise HTTPException(status_code=400, detail="冻结金额异常，无法处理争议")
+
     if favor == "publisher":
+        # 解冻并退款：优先退体验金（与 cancel_task 逻辑一致，防止套现）
         publisher.frozen_balance -= task.budget
-        publisher.balance += task.budget
+        publisher.trial_balance += task.budget
         task.status = TaskStatus.CANCELLED
-        db.add(Transaction(task_id=task.id, to_user_id=publisher.id, amount=task.budget, tx_type="refund", description="争议退款"))
+        db.add(Transaction(
+            task_id=task.id,
+            to_user_id=publisher.id,
+            amount=task.budget,
+            tx_type="refund",
+            description="争议退款（发包方胜出）"
+        ))
     elif favor == "agent":
+        # 解冻并将智能体收入给智能体老板，平台佣金也入账
         publisher.frozen_balance -= task.budget
         if agent_owner:
             agent_owner.balance += task.agent_income
@@ -324,7 +336,27 @@ async def resolve_dispute(
         agent.status = "online"
         task.status = TaskStatus.COMPLETED
         task.completed_at = datetime.utcnow()
-        db.add(Transaction(task_id=task.id, from_user_id=publisher.id, to_user_id=agent_owner.id, amount=task.agent_income, tx_type="release", description="争议结算"))
+        db.add(Transaction(
+            task_id=task.id,
+            from_user_id=publisher.id,
+            to_user_id=agent_owner.id if agent_owner else None,
+            amount=task.agent_income,
+            tx_type="release",
+            description="争议结算（智能体胜出）"
+        ))
+        # 平台佣金入账
+        platform_account = db.query(User).filter(User.role == "admin").first()
+        if platform_account and task.platform_fee > 0:
+            platform_account.balance += task.platform_fee
+            db.add(Transaction(
+                task_id=task.id,
+                from_user_id=publisher.id,
+                to_user_id=platform_account.id,
+                amount=task.platform_fee,
+                tx_type="commission",
+                status="completed",
+                description=f"争议处理平台佣金: {task.title}"
+            ))
     else:
         raise HTTPException(status_code=400, detail="favor 参数无效，可选：publisher/agent")
 
@@ -342,7 +374,7 @@ async def seed_demo_data(db: Session = Depends(get_db)):
 
     # 创建演示用户（防重复）
     demo_users = [
-        {"username": "admin", "email": "admin@agentgig.com", "role": "admin", "trial_balance": 99999},
+        {"username": "admin", "email": "admin@agentgig.com", "role": "admin", "balance": 0, "trial_balance": 99999},
         {"username": "demo_user", "email": "demo@agentgig.com", "role": "normal", "trial_balance": 5000},
         {"username": "agent_master", "email": "master@agentgig.com", "role": "agent_owner", "trial_balance": 3000, "alipay_account": "master@alipay.com"},
         {"username": "creator_zhang", "email": "zhang@agentgig.com", "role": "agent_owner", "trial_balance": 2000},
@@ -354,6 +386,7 @@ async def seed_demo_data(db: Session = Depends(get_db)):
                 email=u["email"],
                 password_hash=hash_password("123456"),
                 role=u["role"],
+                balance=u.get("balance", 0),
                 trial_balance=u["trial_balance"],
                 alipay_account=u.get("alipay_account"),
             ))

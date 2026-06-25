@@ -2,12 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.transaction import Transaction
 from app.schemas import UserRegister, UserLogin, UserResponse, TokenResponse
 from app.auth import hash_password, verify_password, create_access_token, get_current_user
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
+
+# 注册时允许的角色白名单（禁止客户端指定管理员/企业等高权限角色）
+ALLOWED_REGISTER_ROLES = {UserRole.NORMAL, UserRole.AGENT_OWNER}
+
+# 充值金额限制
+MAX_DEPOSIT_AMOUNT = 100000.0  # 单笔最高充值10万
 
 
 @router.post("/register", response_model=TokenResponse)
@@ -17,6 +23,10 @@ async def register(data: UserRegister, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="该邮箱已被注册")
     if db.query(User).filter(User.username == data.username).first():
         raise HTTPException(status_code=400, detail="该用户名已被使用")
+
+    # 角色白名单校验：禁止客户端注册为 admin / enterprise 等高权限角色
+    if data.role not in ALLOWED_REGISTER_ROLES:
+        raise HTTPException(status_code=400, detail="注册时不允许选择该角色类型")
 
     user = User(
         username=data.username,
@@ -69,6 +79,13 @@ async def deposit(
     db: Session = Depends(get_db)
 ):
     """模拟充值（真实余额，可提现）"""
+    # 金额上限校验，防止恶意刷充值
+    if data.amount > MAX_DEPOSIT_AMOUNT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"单笔充值金额不能超过 ¥{MAX_DEPOSIT_AMOUNT:.2f}"
+        )
+
     current_user.balance += data.amount
     tx = Transaction(
         from_user_id=current_user.id,

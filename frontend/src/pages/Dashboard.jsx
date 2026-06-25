@@ -83,9 +83,16 @@ export default function Dashboard() {
     }
   }
 
+  // API Key 安全展示：完整 key 不在列表页显示，提供复制入口
+  const displayApiKey = (key) => {
+    if (!key) return t('dashboard.apiKeyHidden') || 'API Key 已隐藏'
+    return key.slice(0, 8) + '...' + key.slice(-4)
+  }
+
   const copyApiKey = (key) => {
+    if (!key) return
     navigator.clipboard.writeText(key)
-    alert(t('dashboard.apiKeyCopied'))
+    alert(t('dashboard.apiKeyCopied') || 'API Key 已复制')
   }
 
   const tabs = [
@@ -217,13 +224,17 @@ export default function Dashboard() {
                           <div className="text-xs text-gray-500 mt-1">
                             {t('dashboard.completedTasks')} {agent.completed_tasks} {t('dashboard.singleUnit')} | {t('dashboard.earnings')} ¥{agent.total_earnings.toFixed(0)}
                           </div>
-                          <button
-                            onClick={() => copyApiKey(agent.api_key)}
-                            className="text-xs mt-1 p-1 bg-gray-200 rounded font-mono inline-block hover:bg-gray-300 cursor-pointer"
-                            title={t('dashboard.apiKeyTitle')}
-                          >
-                            API Key: {agent.api_key?.slice(0, 16)}...
-                          </button>
+                          {/* API Key 安全展示：完整 key 不在此处显示 */}
+                          <div className="text-xs mt-1 flex items-center gap-1">
+                            <span className="text-gray-400">API Key:</span>
+                            <span
+                              className="px-2 py-0.5 bg-gray-200 rounded font-mono cursor-pointer hover:bg-gray-300 transition-colors"
+                              title={agent.api_key ? t('dashboard.copyApiKey') : 'API Key 未生成'}
+                              onClick={() => agent.api_key && copyApiKey(agent.api_key)}
+                            >
+                              {displayApiKey(agent.api_key)}
+                            </span>
+                          </div>
                         </div>
                         <div className="flex flex-col items-end space-y-2">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${

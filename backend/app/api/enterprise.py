@@ -259,7 +259,7 @@ async def batch_create_tasks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """批量发布任务（企业功能）"""
+    """批量发布任务（企业功能，支持企业信用额度和个人余额）"""
     enterprise = db.query(Enterprise).filter(Enterprise.owner_id == current_user.id).first()
     if not enterprise:
         raise HTTPException(status_code=404, detail="需要企业账号才能使用此功能")
@@ -276,23 +276,42 @@ async def batch_create_tasks(
     total_budget = sum(t.budget for t in data.tasks)
     total_fee = round(total_budget * PLATFORM_FEE_RATE, 2)
 
-    # 检查余额
-    available = current_user.trial_balance + current_user.balance
-    if available < total_budget:
+    # 企业可用信用额度
+    enterprise_available = max(0, enterprise.credit_limit - enterprise.used_credit)
+    personal_available = current_user.trial_balance + current_user.balance
+    total_available = enterprise_available + personal_available
+
+    if total_available < total_budget:
         raise HTTPException(
             status_code=400,
-            detail=f"余额不足，需要 ¥{total_budget:.2f}，当前可用 ¥{available:.2f}"
+            detail=f"可用资金不足，需要 ¥{total_budget:.2f}，企业信用剩余 ¥{enterprise_available:.2f}，个人余额 ¥{personal_available:.2f}"
         )
 
-    # 扣款
+    # 优先使用企业信用额度
     remaining = total_budget
-    if current_user.trial_balance >= remaining:
-        current_user.trial_balance -= remaining
+    if enterprise_available >= remaining:
+        # 全部用企业信用
+        enterprise.used_credit += remaining
         remaining = 0
+    elif enterprise_available > 0:
+        # 部分用企业信用
+        enterprise.used_credit += enterprise_available
+        remaining -= enterprise_available
+        # 剩余从个人余额扣
+        if current_user.trial_balance >= remaining:
+            current_user.trial_balance -= remaining
+        else:
+            remaining -= current_user.trial_balance
+            current_user.trial_balance = 0
+            current_user.balance -= remaining
     else:
-        remaining -= current_user.trial_balance
-        current_user.trial_balance = 0
-        current_user.balance -= remaining
+        # 全部用个人余额
+        if current_user.trial_balance >= remaining:
+            current_user.trial_balance -= remaining
+        else:
+            remaining -= current_user.trial_balance
+            current_user.trial_balance = 0
+            current_user.balance -= remaining
 
     current_user.frozen_balance += total_budget
 
@@ -327,9 +346,6 @@ async def batch_create_tasks(
     )
     db.add(tx)
 
-    # 更新企业已用额度
-    enterprise.used_credit += total_budget
-
     db.commit()
 
     return {
@@ -337,6 +353,7 @@ async def batch_create_tasks(
         "count": len(created_tasks),
         "total_budget": total_budget,
         "total_fee": total_fee,
+        "enterprise_used_credit": enterprise.used_credit,
     }
 
 

@@ -1,81 +1,99 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import api from '../services/api'
+
+const SYSTEM_GREETING = {
+  role: 'assistant',
+  content: '你好！我是 AgentGig 的智能需求助手 🤖\n\n告诉我你想做什么，我会帮你完善需求、匹配合适的智能体，一键发包！\n\n比如：\n• "帮我做一个公司官网"\n• "写10篇小红书种草文案"\n• "设计一个App的Logo"',
+}
 
 export default function ChatWindow({ onComplete }) {
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: '你好！我是 AgentGig 的小助手 🤖\n\n你想找智能体帮你做什么？告诉我你的需求，我来帮你完善！',
-    },
-  ])
+  const [messages, setMessages] = useState([SYSTEM_GREETING])
   const [input, setInput] = useState('')
-  const [step, setStep] = useState(0)
-  const [taskData, setTaskData] = useState({})
+  const [loading, setLoading] = useState(false)
+  const [taskData, setTaskData] = useState(null)
+  const [llmStatus, setLlmStatus] = useState(null)
   const messagesEndRef = useRef(null)
-
-  const QUESTIONS = [
-    { key: 'title', prompt: '好的！请简单描述一下你想做什么？（一句话概括）' },
-    { key: 'description', prompt: '能再详细说说具体要求吗？比如：功能需求、风格偏好、交付格式等' },
-    { key: 'category', prompt: '这个任务属于哪一类？\n1. 💻 开发（网站/App/脚本）\n2. ✍️ 文案（文章/营销/翻译）\n3. 🎨 设计（Logo/UI/海报）\n4. 📊 数据分析\n5. 其他' },
-    { key: 'budget', prompt: '你的预算大概是多少？（输入数字，单位：元）' },
-  ]
-
-  const CATEGORY_MAP = {
-    '1': 'development', '开发': 'development', '代码': 'development', '网站': 'development', 'app': 'development',
-    '2': 'copywriting', '文案': 'copywriting', '文章': 'copywriting', '写作': 'copywriting',
-    '3': 'design', '设计': 'design', 'logo': 'design', 'ui': 'design',
-    '4': 'data_analysis', '数据': 'data_analysis', '分析': 'data_analysis',
-  }
+  const inputRef = useRef(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const sendMessage = () => {
-    if (!input.trim()) return
+  // 检查 LLM 配置状态
+  useEffect(() => {
+    api.get('/api/chat/config').then(r => {
+      setLlmStatus(r.data)
+    }).catch(() => {})
+  }, [])
 
-    const userMsg = { role: 'user', content: input }
+  const sendMessage = async () => {
+    const text = input.trim()
+    if (!text || loading) return
+
+    const userMsg = { role: 'user', content: text }
     setMessages(prev => [...prev, userMsg])
     setInput('')
+    setLoading(true)
 
-    setTimeout(() => {
-      if (step < QUESTIONS.length) {
-        const q = QUESTIONS[step]
-        let value = input.trim()
+    try {
+      // 构建消息历史（去掉系统欢迎语）
+      const chatHistory = [...messages.slice(1), userMsg].map(m => ({
+        role: m.role,
+        content: m.content,
+      }))
 
-        if (q.key === 'category') {
-          value = CATEGORY_MAP[value.toLowerCase()] || 'other'
-        }
-        if (q.key === 'budget') {
-          value = parseFloat(value) || 100
-        }
+      const res = await api.post('/api/chat', { messages: chatHistory })
+      const { content, task_data } = res.data
 
-        const newData = { ...taskData, [q.key]: value }
-        setTaskData(newData)
+      setMessages(prev => [...prev, { role: 'assistant', content }])
 
-        if (step < QUESTIONS.length - 1) {
-          setMessages(prev => [...prev, { role: 'assistant', content: QUESTIONS[step + 1].prompt }])
-        } else {
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: `太好了！我帮你整理一下需求：\n\n📋 **${newData.title}**\n📝 ${newData.description}\n💰 预算：¥${newData.budget}\n\n确认发布吗？点击下方按钮直接发布！`,
-          }])
-          onComplete?.(newData)
-        }
-        setStep(step + 1)
+      if (task_data) {
+        setTaskData(task_data)
       }
-    }, 500)
+    } catch (err) {
+      const errMsg = err.response?.data?.detail || '抱歉，出了点问题，请重试'
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `⚠️ ${errMsg}`,
+      }])
+    } finally {
+      setLoading(false)
+      inputRef.current?.focus()
+    }
+  }
+
+  const handlePublish = () => {
+    if (taskData) {
+      onComplete?.(taskData)
+    }
+  }
+
+  const resetChat = () => {
+    setMessages([SYSTEM_GREETING])
+    setTaskData(null)
+    setInput('')
   }
 
   return (
     <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden flex flex-col h-[400px] sm:h-[500px]">
-      <div className="bg-gradient-to-r from-primary-500 to-purple-600 px-3 sm:px-4 py-2.5 sm:py-3">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-primary-500 to-purple-600 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between">
         <h3 className="text-white font-medium flex items-center space-x-2 text-sm sm:text-base">
           <span>🤖</span>
           <span>智能需求助手</span>
+          {llmStatus?.llm_configured && (
+            <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
+              {llmStatus.model}
+            </span>
+          )}
         </h3>
+        <button onClick={resetChat} className="text-white/70 hover:text-white text-xs">
+          重新开始
+        </button>
       </div>
 
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
         <AnimatePresence>
           {messages.map((msg, i) => (
@@ -90,28 +108,78 @@ export default function ChatWindow({ onComplete }) {
                   ? 'bg-primary-500 text-white rounded-br-md'
                   : 'bg-gray-100 text-gray-800 rounded-bl-md'
               }`}>
-                <p className="text-xs sm:text-sm whitespace-pre-line">{msg.content}</p>
+                <p className="text-xs sm:text-sm whitespace-pre-line leading-relaxed">{msg.content}</p>
               </div>
             </motion.div>
           ))}
         </AnimatePresence>
+
+        {/* Loading indicator */}
+        {loading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex justify-start"
+          >
+            <div className="bg-gray-100 px-4 py-2.5 rounded-2xl rounded-bl-md">
+              <div className="flex space-x-1.5">
+                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Task preview card */}
+        {taskData && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mx-2 p-3 bg-green-50 border border-green-200 rounded-xl"
+          >
+            <p className="text-xs text-green-600 font-medium mb-2">📋 需求已整理完成</p>
+            <p className="text-sm font-semibold text-gray-800">{taskData.title}</p>
+            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{taskData.description}</p>
+            <div className="flex items-center justify-between mt-3">
+              <span className="text-sm font-bold text-primary-600">¥{taskData.budget}</span>
+              <button
+                onClick={handlePublish}
+                className="btn-primary text-xs px-4 py-1.5"
+              >
+                发布任务
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Input */}
       <div className="border-t p-2.5 sm:p-3">
         <div className="flex gap-2">
           <input
+            ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-            placeholder="输入你的需求..."
-            className="input-field text-sm"
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+            placeholder={loading ? '思考中...' : '描述你的需求...'}
+            disabled={loading}
+            className="input-field text-sm disabled:opacity-50"
           />
-          <button onClick={sendMessage} className="btn-primary px-3 sm:px-4 text-sm shrink-0">
-            发送
+          <button
+            onClick={sendMessage}
+            disabled={loading || !input.trim()}
+            className="btn-primary px-3 sm:px-4 text-sm shrink-0 disabled:opacity-50"
+          >
+            {loading ? '...' : '发送'}
           </button>
         </div>
+        {!llmStatus?.llm_configured && (
+          <p className="text-[10px] text-gray-400 mt-1">当前使用内置规则引擎，配置 LLM API Key 可获得更智能的对话体验</p>
+        )}
       </div>
     </div>
   )

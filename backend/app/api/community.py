@@ -209,12 +209,27 @@ async def delete_post(
 @router.post("/posts/{post_id}/like")
 async def like_post(
     post_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """点赞帖子"""
+    """点赞帖子（需要登录，同一用户只能点赞一次）"""
+    from app.models.community import PostLike
+
     post = db.query(CommunityPost).filter(CommunityPost.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="帖子不存在")
+
+    # 检查是否已点赞（防止重复点赞）
+    existing = db.query(PostLike).filter(
+        PostLike.post_id == post_id,
+        PostLike.user_id == current_user.id,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="你已经点赞过此帖子")
+
+    # 记录点赞
+    like_record = PostLike(post_id=post_id, user_id=current_user.id)
+    db.add(like_record)
     post.likes = (post.likes or 0) + 1
     db.commit()
     return {"likes": post.likes}
@@ -253,12 +268,27 @@ async def create_reply(
 @router.post("/replies/{reply_id}/like")
 async def like_reply(
     reply_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """点赞回复"""
+    """点赞回复（需要登录，同一用户只能点赞一次）"""
+    from app.models.community import ReplyLike
+
     reply = db.query(CommunityReply).filter(CommunityReply.id == reply_id).first()
     if not reply:
         raise HTTPException(status_code=404, detail="回复不存在")
+
+    # 检查是否已点赞
+    existing = db.query(ReplyLike).filter(
+        ReplyLike.reply_id == reply_id,
+        ReplyLike.user_id == current_user.id,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="你已经点赞过此回复")
+
+    # 记录点赞
+    like_record = ReplyLike(reply_id=reply_id, user_id=current_user.id)
+    db.add(like_record)
     reply.likes = (reply.likes or 0) + 1
     db.commit()
     return {"likes": reply.likes}

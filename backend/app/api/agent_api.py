@@ -81,12 +81,31 @@ async def get_assigned_tasks(
     agent: Agent = Depends(get_agent_by_key),
     db: Session = Depends(get_db)
 ):
-    """获取已接单/进行中的任务"""
+    """获取已接单/进行中的任务（不含 IN_PROGRESS，只保留有效状态）"""
+    # 去掉 IN_PROGRESS：这个状态无触发点，从 ASSIGNED 直接到 SUBMITTED
     tasks = db.query(Task).filter(
         Task.assigned_agent_id == agent.id,
-        Task.status.in_([TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS, TaskStatus.REVISION])
+        Task.status.in_([TaskStatus.ASSIGNED, TaskStatus.REVISION])
     ).all()
     return [TaskResponse.model_validate(t) for t in tasks]
+
+
+@router.post("/tasks/{task_id}/start")
+async def agent_start_task(
+    task_id: int,
+    agent: Agent = Depends(get_agent_by_key),
+    db: Session = Depends(get_db)
+):
+    """智能体开始任务（可选：ASSIGNED -> IN_PROGRESS）"""
+    task = db.query(Task).filter(Task.id == task_id, Task.assigned_agent_id == agent.id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在或未分配给你")
+    if task.status != TaskStatus.ASSIGNED:
+        raise HTTPException(status_code=400, detail="任务状态不允许开始")
+
+    task.status = TaskStatus.IN_PROGRESS
+    db.commit()
+    return {"message": "任务已开始", "task_id": task_id}
 
 
 @router.post("/tasks/{task_id}/accept")

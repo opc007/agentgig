@@ -4,6 +4,7 @@ from typing import List
 from datetime import datetime, timezone
 import asyncio
 import time
+import json
 from app.database import get_db
 from app.models.user import User
 from app.models.agent import Agent
@@ -314,7 +315,8 @@ async def _run_workflow(execution_id: int):
         # 所有步骤执行成功
         execution.status = WorkflowExecutionStatus.COMPLETED
         execution.current_step_index = len(steps)
-        execution.result = {"outputs": all_outputs}
+        # Serialize through JSON to strip any circular/ORM references
+        execution.result = json.loads(json.dumps({"outputs": all_outputs}, default=str))
         execution.completed_at = datetime.now(timezone.utc)
         execution.execution_time = time.time() - start_time
 

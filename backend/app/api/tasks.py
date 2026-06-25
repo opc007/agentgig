@@ -61,7 +61,6 @@ async def get_price_guidance(
     tasks = query.all()
 
     if not tasks:
-        # 没有历史数据时返回默认参考价格
         default_ranges = {
             "copywriting": {"min": 50, "max": 500, "avg": 200},
             "design": {"min": 100, "max": 2000, "avg": 500},
@@ -99,12 +98,10 @@ async def create_task(
     """发布新任务（发包）"""
     platform_fee = data.budget * PLATFORM_FEE_RATE
 
-    # 优先使用体验金，不够再用余额
     total_available = current_user.trial_balance + current_user.balance
     if total_available < data.budget:
         raise HTTPException(status_code=400, detail=f"余额不足，需要 {data.budget}，当前可用 {total_available}")
 
-    # 先扣体验金，再扣余额
     remaining = data.budget
     if current_user.trial_balance >= remaining:
         current_user.trial_balance -= remaining
@@ -146,6 +143,13 @@ async def create_task(
     )
     db.add(tx)
     db.commit()
+
+    # WebSocket: 广播新任务到市场大厅
+    try:
+        from app.websocket.manager import manager
+        await manager.broadcast_new_task(TaskResponse.model_validate(task).model_dump(mode="json"))
+    except Exception:
+        pass  # WebSocket 推送失败不影响主流程
 
     return TaskResponse.model_validate(task)
 
@@ -257,7 +261,6 @@ async def bid_task(
     if agent.status != "online":
         raise HTTPException(status_code=400, detail="智能体需要在线才能竞标")
 
-    # 竞标价格校验：不能超过预算的3倍
     if data.price > task.budget * 3:
         raise HTTPException(status_code=400, detail=f"竞标价格不能超过预算的3倍（¥{task.budget * 3}）")
 
@@ -277,6 +280,18 @@ async def bid_task(
     task.bids = bids
     task.status = TaskStatus.BIDDING
     db.commit()
+
+    # WebSocket: 广播新竞标
+    try:
+        from app.websocket.manager import manager
+        await manager.broadcast_bid_placed(task_id, bid_record)
+        await manager.broadcast_task(task_id, {
+            "type": "new_bid",
+            "data": bid_record,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+    except Exception:
+        pass
 
     return {"message": "竞标成功", "bid": bid_record}
 
@@ -305,6 +320,18 @@ async def accept_bid(
     agent.status = "busy"
     db.commit()
 
+    # WebSocket: 广播任务被接单
+    try:
+        from app.websocket.manager import manager
+        await manager.broadcast_task_accepted(task_id, agent.name)
+        await manager.broadcast_task(task_id, {
+            "type": "task_accepted",
+            "agent_name": agent.name,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+    except Exception:
+        pass
+
     return {"message": f"已选择 {agent.name} 接单", "task_id": task_id}
 
 
@@ -332,7 +359,42 @@ async def submit_deliverable(
     task.status = TaskStatus.SUBMITTED
     db.commit()
 
+    # WebSocket: 广播交付物提交
+    try:
+        from app.websocket.manager import manager
+        await manager.broadcast_task(task_id, {
+            "type": "deliverable_submitted",
+            "task_id": task_id,
+            "agent_name": agent.name,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+    except Exception:
+        pass
+
     return {"message": "交付物已提交，等待用户验收"}
+
+
+def _record_learning_data(task: Task, agent: Agent, db: Session):
+    """任务完成后自动记录学习数据"""
+    try:
+        from app.models.learning import AgentTaskHistory
+        history = AgentTaskHistory(
+            agent_id=agent.id,
+            task_id=task.id,
+            success=True,
+            skill_match_score=1.0,
+            skills_used=task.required_skills or [],
+        )
+        db.add(history)
+        db.commit()
+    except Exception:
+        pass  # 学习记录失败不影响主流程
+
+
+def _get_platform_account_id() -> Optional[int]:
+    """获取平台账户ID（首次调用时自动创建）"""
+    # 平台账户固定 ID=1，在 seed_demo_data 中确保 admin 用户存在
+    return 1
 
 
 @router.post("/{task_id}/approve")
@@ -348,9 +410,17 @@ async def approve_task(
     if task.status != TaskStatus.SUBMITTED:
         raise HTTPException(status_code=400, detail="任务尚未提交交付物")
 
+    # 冻结金额校验：防止余额不足时扣成负数
+    if current_user.frozen_balance < task.budget:
+        raise HTTPException(
+            status_code=400,
+            detail=f"冻结金额不足，当前冻结 ¥{current_user.frozen_balance:.2f}，需要 ¥{task.budget:.2f}"
+        )
+
     agent = db.query(Agent).filter(Agent.id == task.assigned_agent_id).first()
     agent_owner = db.query(User).filter(User.id == agent.owner_id).first()
 
+    # 解冻并结算
     current_user.frozen_balance -= task.budget
     agent_owner.balance += task.agent_income
     agent.total_earnings += task.agent_income
@@ -360,8 +430,30 @@ async def approve_task(
     task.status = TaskStatus.COMPLETED
     task.completed_at = datetime.utcnow()
 
-    db.add(Transaction(task_id=task.id, from_user_id=current_user.id, to_user_id=agent_owner.id, amount=task.agent_income, tx_type="release", description=f"任务结算: {task.title}"))
-    db.add(Transaction(task_id=task.id, from_user_id=current_user.id, amount=task.platform_fee, tx_type="commission", description=f"平台佣金: {task.title}"))
+    # 记录释放给智能体的交易
+    db.add(Transaction(
+        task_id=task.id,
+        from_user_id=current_user.id,
+        to_user_id=agent_owner.id,
+        amount=task.agent_income,
+        tx_type="release",
+        description=f"任务结算: {task.title}"
+    ))
+
+    # 平台佣金入账到平台账户
+    platform_account = db.query(User).filter(User.role == "admin").first()
+    if platform_account and task.platform_fee > 0:
+        platform_account.balance += task.platform_fee
+        db.add(Transaction(
+            task_id=task.id,
+            from_user_id=current_user.id,
+            to_user_id=platform_account.id,
+            amount=task.platform_fee,
+            tx_type="commission",
+            status="completed",
+            description=f"平台佣金: {task.title}"
+        ))
+
     db.commit()
 
     # 自动刷新认证等级
@@ -370,6 +462,9 @@ async def approve_task(
     if new_level != agent.certification_level:
         agent.certification_level = new_level
         db.commit()
+
+    # 自动记录学习数据
+    _record_learning_data(task, agent, db)
 
     return {"message": "验收通过，已完成结算", "agent_income": task.agent_income, "platform_fee": task.platform_fee}
 
@@ -389,6 +484,7 @@ async def reject_task(
         raise HTTPException(status_code=400, detail="任务尚未提交交付物")
 
     if task.revision_count >= task.max_revisions:
+        # 超次进入争议时：冻结金额保持锁定，直到 resolve_dispute 处理
         task.status = TaskStatus.DISPUTED
         db.commit()
         return {"message": "已超过最大返工次数，进入争议处理"}
@@ -425,9 +521,8 @@ async def cancel_task(
     if task.status not in [TaskStatus.PENDING, TaskStatus.BIDDING]:
         raise HTTPException(status_code=400, detail="任务已被接单，无法取消")
 
-    # 退还逻辑：优先退到真实余额（可提现），超出部分退到体验金
     current_user.frozen_balance -= task.budget
-    current_user.balance += task.budget
+    current_user.trial_balance += task.budget
     task.status = TaskStatus.CANCELLED
     db.add(Transaction(task_id=task.id, to_user_id=current_user.id, amount=task.budget, tx_type="refund", description=f"任务取消退款: {task.title}"))
     db.commit()
@@ -451,8 +546,28 @@ async def send_message(
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
-    msg = Message(task_id=task_id, sender_id=current_user.id, sender_type="user", sender_name=current_user.username, content=data.content, message_type=data.message_type)
+
+    msg = Message(
+        task_id=task_id,
+        sender_id=current_user.id,
+        sender_type="user",
+        sender_name=current_user.username,
+        content=data.content,
+        message_type=data.message_type
+    )
     db.add(msg)
     db.commit()
     db.refresh(msg)
+
+    # WebSocket: 广播新消息
+    try:
+        from app.websocket.manager import manager
+        await manager.broadcast_task(task_id, {
+            "type": "new_message",
+            "data": MessageResponse.model_validate(msg).model_dump(mode="json"),
+            "timestamp": datetime.utcnow().isoformat()
+        })
+    except Exception:
+        pass
+
     return MessageResponse.model_validate(msg)

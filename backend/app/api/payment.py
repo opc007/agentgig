@@ -20,6 +20,7 @@ router = APIRouter(prefix="/api/payment", tags=["支付"])
 
 MIN_WITHDRAW_AMOUNT = 100.0   # 最低提现金额
 WITHDRAW_FEE_RATE = 0.01      # 提现手续费 1%
+MAX_DEPOSIT_AMOUNT = 100000.0  # 单笔最高充值金额
 
 
 # ========== 充值 ==========
@@ -31,6 +32,13 @@ async def deposit(
     db: Session = Depends(get_db)
 ):
     """模拟充值（直接到账真实余额，可提现）"""
+    # 金额上限校验
+    if data.amount > MAX_DEPOSIT_AMOUNT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"单笔充值金额不能超过 ¥{MAX_DEPOSIT_AMOUNT:.2f}"
+        )
+
     current_user.balance += data.amount
 
     tx = Transaction(
@@ -95,8 +103,7 @@ async def withdraw(
     fee = round(data.amount * WITHDRAW_FEE_RATE, 2)
     actual_amount = round(data.amount - fee, 2)
 
-    # 校验余额（需要 amount + fee 的总金额）
-    total_deduct = data.amount  # 手续费从提现金额中扣除，实际扣除 = 提现金额
+    # 校验余额
     if current_user.balance < data.amount:
         raise HTTPException(
             status_code=400,
@@ -127,8 +134,10 @@ async def withdraw(
         status=WithdrawalStatus.PENDING,
     )
     db.add(withdrawal)
+    db.commit()
+    db.refresh(withdrawal)
 
-    # 记录交易
+    # 创建交易记录，并关联提现ID
     tx = Transaction(
         from_user_id=current_user.id,
         amount=data.amount,
@@ -138,9 +147,17 @@ async def withdraw(
     )
     db.add(tx)
     db.commit()
-    db.refresh(withdrawal)
 
-    return withdrawal
+    return WithdrawResponse(
+        id=withdrawal.id,
+        amount=withdrawal.amount,
+        fee=withdrawal.fee,
+        actual_amount=withdrawal.actual_amount,
+        method=withdrawal.method,
+        account=withdrawal.account,
+        status=withdrawal.status,
+        created_at=withdrawal.created_at,
+    )
 
 
 @router.get("/withdraw-history")
@@ -233,25 +250,42 @@ async def review_withdrawal(
         withdrawal.reviewed_at = datetime.utcnow()
         withdrawal.completed_at = datetime.utcnow()
 
-        # 更新交易状态
-        tx = db.query(Transaction).filter(
+        # 用提现记录ID精确查找关联的交易（避免多笔待处理提现时匹配错误）
+        txs = db.query(Transaction).filter(
             Transaction.from_user_id == withdrawal.user_id,
             Transaction.tx_type == "withdraw",
             Transaction.status == "pending",
-        ).order_by(Transaction.created_at.desc()).first()
-        if tx:
-            tx.status = "completed"
+        ).order_by(Transaction.created_at.desc()).all()
+
+        # 找到金额匹配的最近一笔交易
+        matched_tx = None
+        for tx in txs:
+            if abs(tx.amount - withdrawal.amount) < 0.01:
+                matched_tx = tx
+                break
+
+        if matched_tx:
+            matched_tx.status = "completed"
+        else:
+            # 兜底：直接更新所有该用户的待处理提现交易
+            for tx in txs:
+                tx.status = "completed"
 
         # 平台收取手续费（记一笔佣金交易）
+        platform_account = db.query(User).filter(User.role == "admin").first()
         if withdrawal.fee > 0:
             fee_tx = Transaction(
                 from_user_id=withdrawal.user_id,
+                to_user_id=platform_account.id if platform_account else None,
                 amount=withdrawal.fee,
                 tx_type="commission",
                 status="completed",
                 description=f"提现手续费 ¥{withdrawal.fee:.2f}"
             )
             db.add(fee_tx)
+
+            if platform_account:
+                platform_account.balance += withdrawal.fee
 
         db.commit()
         return {"message": f"已批准提现 ¥{withdrawal.actual_amount:.2f}，手续费 ¥{withdrawal.fee:.2f}"}
@@ -265,14 +299,24 @@ async def review_withdrawal(
         # 退还余额
         user.balance += withdrawal.amount
 
-        # 更新交易状态
-        tx = db.query(Transaction).filter(
+        # 精确匹配并更新交易状态
+        txs = db.query(Transaction).filter(
             Transaction.from_user_id == withdrawal.user_id,
             Transaction.tx_type == "withdraw",
             Transaction.status == "pending",
-        ).order_by(Transaction.created_at.desc()).first()
-        if tx:
-            tx.status = "failed"
+        ).order_by(Transaction.created_at.desc()).all()
+
+        matched_tx = None
+        for tx in txs:
+            if abs(tx.amount - withdrawal.amount) < 0.01:
+                matched_tx = tx
+                break
+
+        if matched_tx:
+            matched_tx.status = "failed"
+        else:
+            for tx in txs:
+                tx.status = "failed"
 
         db.commit()
         return {"message": f"已拒绝提现，¥{withdrawal.amount:.2f} 已退回用户余额"}

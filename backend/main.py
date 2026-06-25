@@ -6,7 +6,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.database import engine, Base
-from app.api import auth, agents, tasks, agent_api, admin, ratings, payment, enterprise, open_api, capabilities, apps, market, workflows, learning, community
+from app.api import auth, agents, tasks, agent_api, admin, ratings, payment, enterprise, open_api, capabilities, apps, market, workflows, learning, community, chat
 from app.websocket.manager import manager
 
 
@@ -55,6 +55,7 @@ app.include_router(market.router)
 app.include_router(workflows.router)
 app.include_router(learning.router)
 app.include_router(community.router)
+app.include_router(chat.router)
 
 
 @app.get("/")
